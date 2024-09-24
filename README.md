@@ -3,7 +3,8 @@ This projects got scripts to run 3sixty locally. The script downloads the necess
 and spin up 3sixty in your machine.
 
 ## Prerequisites
-Please ensure that you got Docker in you machine. It is tested in Docker 26.1.
+Please ensure that you got Docker in you machine. It is tested in Docker 26.1. Also, your github user needs permission
+to download the container. Please contact 3sixty team to get necessary permission.
 
 ## How to run 3sixty
 Clone the project to your machine. You should already be aware of the 3sixty version to use. 
