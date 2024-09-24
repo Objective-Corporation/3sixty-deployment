@@ -3,17 +3,18 @@ This projects got scripts to run 3sixty locally. The script downloads the necess
 and spin up 3sixty in your machine.
 
 ## Prerequisites
-Please ensure you got Docker in you machine. It is tested in Docker 26.1.
+Please ensure that you got Docker in you machine. It is tested in Docker 26.1.
 
 ## How to run 3sixty
-Clone the project in your machine. You should already know the version of 3sixty.
-For example, the version is 4.5.0. Then, Move to `scripts` directory and run below commands to spin up 3sixty.
+Clone the project to your machine. You should already be aware of the 3sixty version to use. 
+If not, please reach out to the 3sixty team for confirmation. Assuming the version is 4.5.0, 
+navigate to the `scripts` directory and run the following commands to spin up 3sixty.
 
 ````
 $env:VERSION="4.5.0"
 docker-compose up -d
 ````
-If you got different version, please update the version accordingly. It should run 3sixty in your machine.
+If you got different version, please update the version accordingly.
 
 Please visit https://localhost:8443/3sixty-admin/login for 3sixty admin. And visit https://localhost:8444/3sixty-discovery/login
 for 3sixty discovery.
