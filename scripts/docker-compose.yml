@@ -1,0 +1,55 @@
+services:
+  threesixty-admin:
+    image: ghcr.io/objective-corporation/3sixty/threesixty:${VERSION}
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      - SSL_ENABLED=true
+    depends_on:
+      - mongo
+    networks:
+      - threesixty
+
+  threesixty-discovery:
+    image: ghcr.io/objective-corporation/3sixty/discovery:${VERSION}
+    ports:
+      - "8081:8080"
+      - "8444:8443"
+    environment:
+      - SSL_ENABLED=true
+    depends_on:
+      - mongo
+      - threesixty-admin
+    networks:
+      - threesixty
+
+  mongo:
+    image: ghcr.io/objective-corporation/3sixty/mongo:${VERSION}
+    ports:
+      - "27017:27017"
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - threesixty
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - threesixty
+
+networks:
+  threesixty:
+volumes:
+  mongo_data:
+  es_data:
