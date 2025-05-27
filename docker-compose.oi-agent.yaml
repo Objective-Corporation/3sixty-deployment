@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   remote-agent-oi-rag:
     image: ghcr.io/objective-corporation/3sixty/remote-agent-oi-rag:5.0.0
