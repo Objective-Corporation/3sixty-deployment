@@ -13,11 +13,12 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs/tls.crt:/etc/nginx/certs/tls.crt:ro
       - ./nginx/certs/tls.key:/etc/nginx/certs/tls.key:ro
+    restart: unless-stopped
     networks:
       - threesixty
 
   threesixty-admin:
-    image: ghcr.io/objective-corporation/3sixty/threesixty:5.0.1-RC2
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixty:5.0.1-RC3
     container_name: threesixty-admin
     env_file:
       - ./.env.admin
@@ -25,13 +26,14 @@ services:
       SSL_ENABLED: false
     depends_on:
       - mongo
+    restart: on-failure:5
     networks:
       - threesixty
     #volumes:
     #  - ../my-data:/usr/local/tomcat/localMount:rw
 
   threesixty-discovery:
-    image: ghcr.io/objective-corporation/3sixty/discovery:5.0.1-RC2
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixtydiscovery:5.0.1-RC3
     container_name: threesixty-discovery
     env_file:
       - ./.env.discovery
@@ -40,6 +42,7 @@ services:
     depends_on:
       - mongo
       - threesixty-admin
+    restart: on-failure:5
     networks:
       - threesixty
     #volumes:
@@ -52,10 +55,10 @@ services:
       - "27017:27017"
     env_file:
       - ./.env.mongo
-    restart: always
     volumes:
       - mongo_data:/data/db
       - ./mongodb/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
+    restart: unless-stopped
     networks:
       - threesixty
 
@@ -70,12 +73,13 @@ services:
       - "9300:9300"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
     networks:
       - threesixty
 
   # Declarative Agent
   oi-rag:
-    image: ghcr.io/objective-corporation/3sixty/oi-rag:5.0.0
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveoirag:5.0.1-RC3
     container_name: oi-rag
     env_file:
       - ./.env.oirag
@@ -84,6 +88,7 @@ services:
     depends_on:
       - opensearch
       - ollama
+    restart: unless-stopped
     networks:
       - threesixty
 
@@ -95,6 +100,7 @@ services:
     entrypoint: [ "bash", "-c" ]
     command: >
       "ollama serve & sleep 5 && ollama pull mxbai-embed-large && wait"
+    restart: unless-stopped
     networks:
       - threesixty
 
@@ -111,6 +117,7 @@ services:
       OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g"
     volumes:
       - opensearch_data:/usr/share/opensearch/data:rw
+    restart: unless-stopped
     networks:
       - threesixty
 
@@ -123,6 +130,7 @@ services:
       OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
     depends_on:
       - opensearch
+    restart: unless-stopped
     networks:
       - threesixty
 
@@ -135,17 +143,19 @@ services:
     ports:
       #   - "5672:5672"
       - "15672:15672"
+    restart: unless-stopped
     networks:
       - threesixty
   
   scim-server:
-    image: ghcr.io/objective-corporation/3sixty/scim-server:1.0.5
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver:1.0.5
     container_name: scim-server
     env_file:
       - ./.env.scim
     depends_on:
       - mongo
       - rabbitmq
+    restart: on-failure:5
     networks:
       - threesixty
 
