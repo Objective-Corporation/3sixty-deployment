@@ -8,7 +8,9 @@ This repository contains everything you need to run all 3Sixty services locally 
 
 - **Docker** ≥ 20.10
 - **Docker Compose** ≥ 1.29
-
+- **[AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)** ≥ 2
+- **[ngrok](https://ngrok.com/downloads)** ≥ 3.11 (Optional)
+- **[Cloudflare Tunnel (cloudflared)](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)** ≥ 2025.5.0 (Optional)
 ---
 
 ## Configuration
@@ -110,3 +112,52 @@ docker compose -f docker-compose.oi-agent.yaml up -d
 | OpenSearch Dashboard | [http://localhost:15601](http://localhost:15601)                           |
 
 Certificates are loaded from `./nginx/certs/tls.crt & ./nginx/certs/tls.key`
+
+---
+
+## Public URL Requirement for SCIM and Microsoft Copilot Agent
+Certain services require your local environment to be accessible via a public URL:
+
+### 🔗 Why is a Public URL Needed?
+* SCIM User Provisioning: Microsoft Entra ID (Azure AD) needs to reach your SCIM API endpoint to sync users. This requires a stable, publicly accessible URL.
+* Microsoft Copilot Agent: The remote agent must expose its endpoint to external Microsoft services, which cannot communicate with localhost or private IPs.
+
+### 🚀 How to Set Up a Public URL
+Use a tunneling service like Ngrok or Cloudflare Tunnel to expose your local environment.
+
+**Option 1: Using Ngrok**
+```bash
+ngrok http 443
+```
+This will generate a public HTTPS URL forwarding to your local port 443 (TLS-terminated by Nginx). Example:
+```bash
+https://abc123.ngrok.io → https://localhost
+```
+**Option 2: Using Cloudflare Tunnel (More Stable)**
+If you have a custom domain, you can configure a Cloudflare Tunnel:
+```bash
+cloudflared tunnel --url https://localhost
+```
+### 🧷 Making the URL Persistent
+- Ngrok: Use the --subdomain flag to specify a fixed subdomain:
+```bash
+ngrok http --subdomain=mydomain 443
+```
+- Cloudflare Tunnel: Set up a persistent subdomain (recommended for enterprise or long-term testing).
+- DNS + Port Forwarding: You can map a domain to your public IP with port forwarding.
+
+---
+
+## 🛠️ Troubleshooting
+### Can't Log In to the Discovery Service After OAuth2 Setup?
+If you’ve configured OAuth2 authentication in the Admin service and the Discovery UI doesn't log you in properly, the issue may be due to service-level cache or uninitialized internal state.
+
+✅ Solution: Restart all services to ensure everything is in sync:
+
+```bash
+docker compose down
+docker compose up -d
+```
+This typically resolves login-related issues after OAuth2 configuration changes. If the problem persists, verify that:
+- Environment variables in .env.discovery are correctly set (CLIENT_ID, TENANT_ID, CLIENT_SECRET)
+- The OAuth2 provider callback URL matches the public URL used during setup
