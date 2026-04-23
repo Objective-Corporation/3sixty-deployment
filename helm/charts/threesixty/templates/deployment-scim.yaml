@@ -1,0 +1,59 @@
+{{- if .Values.scim.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threesixty.fullname" . }}-scim-server
+  labels:
+    {{- include "threesixty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scim
+    app: {{ include "threesixty.fullname" . }}-scim-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "threesixty.fullname" . }}-scim-server
+  template:
+    metadata:
+      labels:
+        app: {{ include "threesixty.fullname" . }}-scim-server
+    spec:
+      imagePullSecrets:
+{{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: scim-server
+          image: "{{ .Values.scim.image.repository }}:{{ .Values.scim.image.tag }}"
+          imagePullPolicy: {{ .Values.scim.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.scim.config.serverPort }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "threesixty.fullname" . }}-scim-config
+            - secretRef:
+                name: {{ .Release.Name }}-scim-secret
+          resources:
+            {{- toYaml .Values.resources.scim | nindent 12 }}
+          # /scim/v2/health requires Basic Auth — httpGet probes return 401.
+          # Using tcpSocket probes to confirm the port is accepting connections.
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.scim.config.serverPort }}
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.scim.config.serverPort }}
+            initialDelaySeconds: 75
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.scim.config.serverPort }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+{{- end }}

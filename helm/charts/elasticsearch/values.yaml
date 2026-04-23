@@ -26,4 +26,23 @@ persistence:
 cluster:
   discoveryType: "single-node"
 
-resources: {}
+# Elasticsearch official image runs the 'elasticsearch' user at UID/GID 1000.
+# fsGroup 1000 ensures the elasticsearch user can write to the data PVC.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"

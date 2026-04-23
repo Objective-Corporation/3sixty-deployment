@@ -1,0 +1,99 @@
+# =============================================================================
+# Elasticsearch + Kibana Stack
+# =============================================================================
+# Optional Elasticsearch monitoring with Kibana dashboard
+#
+# Usage:
+#   docker compose -f docker-compose.elasticsearch.yaml up -d
+#   OR
+#   make elasticsearch-start
+#
+# Access:
+#   Kibana: https://localhost/kibana
+#   Elasticsearch: http://localhost:9200
+# =============================================================================
+
+services:
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    container_name: kibana
+    environment:
+      SERVER_NAME: kibana
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      SERVER_BASEPATH: "/kibana"
+      SERVER_REWRITEBASEPATH: "true"
+      # Security (optional - uncomment if using Elasticsearch security)
+      # ELASTICSEARCH_USERNAME: elastic
+      # ELASTICSEARCH_PASSWORD: changeme
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    networks:
+      - threesixty
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/kibana/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Elasticsearch is already in main docker-compose.yaml
+  # This is a reference to ensure proper networking
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      # Security (optional - uncomment for production)
+      # - xpack.security.enabled=true
+      # - ELASTIC_PASSWORD=changeme
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    networks:
+      - threesixty
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1.5G
+        reservations:
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  es_data:
+    name: es_data
+
+networks:
+  threesixty:
+    name: threesixty
+    external: true

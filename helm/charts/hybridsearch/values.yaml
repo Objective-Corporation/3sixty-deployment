@@ -1,47 +1,127 @@
 # Enable or disable the entire hybridsearch chart
 enabled: true
 
-# Ollama settings
-ollama:
-  image:
-    repository: ollama/ollama
-    tag: "0.7.0"
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 11434
-  persistence:
-    enabled: true
-    storageClass: local-path
-    size: 5Gi
-  model: mxbai-embed-large
-
 # oi-rag settings
 oirag:
+  enabled: true
   image:
     repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveoirag
-    tag: "5.0.1-RC3"
+    tag: 5.0.1-RC3
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    port: 8080
+    port: 8000
   env:
     CORS_ALLOW_ORIGINS:        "*"
-    OPENAI_API_BASE:           "http://threesixty-stack-hybridsearch-ollama:11434/v1"
+    # OPENAI_API_BASE and OPENSEARCH_URL are computed from the Helm release name
+    # in configmap-oirag.yaml — do not set them here.
     OPENAI_API_KEY:            "no-key"
     EMBEDDING_MODEL:           "mxbai-embed-large"
-    QA_MODEL:                  "mxbai-embed-large"
+    QA_MODEL: "mxbai-embed-large"
     EXTRACT_SEARCH_QUERY_TEMPERATURE: "0.75"
     QUESTION_AND_ANSWER_TEMPERATURE:  "0.10"
-    OPENSEARCH_URL:            "http://threesixty-stack-opensearch:9200"
     OPENSEARCH_USER:           "admin"
-    OPENSEARCH_PASSWORD:       "admin"
+    # OPENSEARCH_PASSWORD: managed via hybridsearch-oirag-secret
     TEXT_RETRIEVER_K:          "3"
     VECTOR_RETRIEVER_K:        "3"
     RANKER_EMBEDDING_WEIGHT:   "0.5"
     RANKER_BM25_WEIGHT:        "0.5"
     LOG_FILE_PATH:             "/oi-rag-logs/oi-rag.log"
-    BEARER_TOKEN:              "manmade"
+    # BEARER_TOKEN: managed via hybridsearch-oirag-secret
+  # OI-RAG runs as UID/GID 1000 (standard non-root Python app user).
+  # No special host privileges required. Service account: no cluster permissions.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
   logs:
     # emptyDir for temporary logs
     emptyDir: {}
+
+# oi-rag remote agent settings
+remoteagent:
+  enabled: true
+  image:
+    repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveremoteagentoirag 
+    tag: 5.0.2-RC1
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50052
+  env:
+    # REMOTE_AGENT_TOKEN: managed via hybridsearch-remoteagent-secret
+    REMOTE_AGENT_NAME:      ragtest
+    GRPC_PORT:              50052
+    # GRPC_HOST and REMOTE_SERVER_URL are computed from the Helm release name
+    # in configmap-remoteagent.yaml — do not set them here.
+    # SSL_CA_PASSWORD: managed via hybridsearch-remoteagent-secret
+    SSL_ENABLED:            false
+  # Remote agent runs as UID/GID 1000 (standard non-root app user).
+  # No special host privileges required. Service account: no cluster permissions.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  logs:
+    # emptyDir for temporary logs
+    emptyDir: {}
+
+# Ollama LLM Service
+ollama:
+  image:
+    repository: ollama/ollama
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 11434
+  model: "mxbai-embed-large"  # LLM model to pull and serve (matches EMBEDDING_MODEL above)
+  persistence:
+    enabled: true
+    storageClass: ""  # Use default storage class
+    size: 10Gi
+  # IMPORTANT: The official ollama/ollama image writes model files to /root/.ollama
+  # and runs as root (UID 0) by default. Running as non-root requires a custom image
+  # or overriding the model storage path. Set runAsUser: 0 here until a non-root
+  # image or init-container approach is implemented.
+  # Service account: no cluster permissions needed.
+  podSecurityContext:
+    runAsUser: 0    # root — required by official ollama image for model storage
+    fsGroup: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    # Stage 1 hardening — still runs as root (UID 0). Stage 2: init-container to
+    # pre-create /home/ollama/.ollama and run as non-root UID with OLLAMA_MODELS override.
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "1000m"
+    limits:
+      memory: "8Gi"
+      cpu: "4000m"

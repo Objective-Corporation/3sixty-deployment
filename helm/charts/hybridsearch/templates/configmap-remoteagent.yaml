@@ -1,0 +1,17 @@
+{{- if .Values.remoteagent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-remoteagent-config
+  labels:
+    app.kubernetes.io/name: {{ include "hybridsearch.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  {{- range $key, $value := .Values.remoteagent.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  # Service references derived from the release name — correct regardless of
+  # what name is used at helm install time (not hardcoded to threesixty-stack-*)
+  GRPC_HOST: "{{ .Release.Name }}-admin"
+  REMOTE_SERVER_URL: "http://{{ .Release.Name }}-admin:8080/3sixty-admin"
+{{- end }}

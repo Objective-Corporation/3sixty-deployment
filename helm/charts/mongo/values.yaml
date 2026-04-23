@@ -15,9 +15,36 @@ persistence:
   accessMode: ReadWriteOnce
   size: 5Gi
 
+# MongoDB official image runs as UID/GID 999 (mongodb user/group).
+# UID 999 requires no special host privileges.
+# Service account should have no cluster-level permissions.
+# fsGroup 999 ensures the mongodb user can write to the data PVC.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  fsGroup: 999
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
 init:
   enabled: true
-  database: dbtest
+  database: simflofy
   scimDatabase: scim-database
-  rootUsername: dbuser
-  rootPassword: dbpassword
+  # rootUsername and rootPassword are managed via the external Kubernetes secret
+  # {release}-mongo-init-secret (created by kubectl-create-secrets.ps1 or aks-create-secrets.ps1).
+  # These default values are intentionally blank — helm install will fail if the
+  # external secret does not already exist in the namespace.
+  rootUsername: ""
+  rootPassword: ""

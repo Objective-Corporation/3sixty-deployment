@@ -1,0 +1,28 @@
+# Secret values files - NEVER commit these!
+values-production.yaml
+values-prod.yaml
+values-staging.yaml
+values-*.yaml
+*-secrets.yaml
+my-*.yaml
+*-secrets.ps1
+*-secrets.sh
+
+# Certificate files
+certs/
+*.key
+*.crt
+*.pem
+
+# Helm dependency charts
+charts/*/charts/
+*.tgz
+
+# Temporary files
+.DS_Store
+Thumbs.db
+
+# AI assistant context files
+.claude
+claude.md
+.cursor/

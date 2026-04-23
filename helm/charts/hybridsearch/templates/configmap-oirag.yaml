@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-oirag-config
+  labels:
+    app.kubernetes.io/name: {{ include "hybridsearch.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  {{- range $key, $value := .Values.oirag.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  # Service URLs are derived from the release name so they work regardless of
+  # what name is used at helm install time (not hardcoded to threesixty-stack-*)
+  OPENAI_API_BASE: "http://{{ .Release.Name }}-ollama:{{ .Values.ollama.service.port }}/v1"
+  OPENSEARCH_URL: "http://{{ .Release.Name }}-opensearch:9200"

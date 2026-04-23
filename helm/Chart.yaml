@@ -1,31 +1,92 @@
+# ====================================================================
+# HELM CHART VERSIONING GUIDE
+# ====================================================================
+# This Chart.yaml defines the parent chart for the complete 3Sixty stack.
+#
+# VERSION FIELDS:
+#
+# 1. version: The version of THIS CHART (not the application)
+#    - Uses semantic versioning: MAJOR.MINOR.PATCH
+#    - MAJOR (X.0.0): Breaking changes requiring manual intervention
+#      Example: Changing service names, removing features, schema changes
+#    - MINOR (1.X.0): New features, backward compatible changes
+#      Example: Adding new subcharts, new configuration options
+#    - PATCH (1.0.X): Bug fixes, documentation updates
+#      Example: Fixing templates, updating comments, config tweaks
+#
+# 2. appVersion: The version of the 3Sixty APPLICATION being deployed
+#    - This tracks the actual 3Sixty software version (e.g., 5.1.0)
+#    - Users can see what application version this chart deploys
+#    - Update when 3Sixty components are upgraded
+#
+# WHEN TO UPDATE VERSIONS:
+#
+# Update the chart version (version field) when:
+#   - You modify templates, values, or chart structure
+#   - You update subchart dependencies
+#   - You change default configurations
+#   - Document changes in CHANGELOG.md
+#
+# Update the app version (appVersion field) when:
+#   - 3Sixty components are upgraded to new releases
+#   - Component image tags change in values.yaml
+#
+# SUBCHART VERSIONING:
+#   - Each subchart has its own Chart.yaml with independent versioning
+#   - Update subchart version when modifying that subchart
+#   - Parent chart dependency versions should match subchart versions
+#   - See subchart Chart.yaml files for component-specific versioning
+#
+# HELM UPGRADE BEHAVIOR:
+#   - 'helm upgrade' compares chart versions to detect changes
+#   - You can upgrade with the same version (forces redeployment)
+#   - Version helps track releases: 'helm history <release>'
+#   - Always document version changes in CHANGELOG.md
+#
+# ====================================================================
+
 apiVersion: v2
 name: threesixty-stack
-description: A 3Sixty Helm chart for Kubernetes
+description: Production-ready Helm chart for deploying the complete 3Sixty application stack to Kubernetes
 type: application
-version: 0.1.0
-appVersion: "5.1.0"
+version: 1.5.0  # Chart version - update when modifying chart structure/templates
+appVersion: "5.2.0"  # 3Sixty application version being deployed
 
+# Subchart Dependencies
+# Update dependency versions to match subchart Chart.yaml versions
+# After modifying versions, run: helm dependency update
 dependencies:
-  - name: mongo
-    version: 0.1.0
+  - name: mongo  # MongoDB database for 3Sixty Admin & Discovery services
+    version: 1.0.0  # Must match charts/mongo/Chart.yaml version
     repository: file://charts/mongo
+    condition: mongo.enabled
 
-  - name: threesixty
-    version: 0.1.0
+  - name: threesixty  # Core 3Sixty services (Admin, Discovery, SCIM)
+    version: 1.0.0  # Must match charts/threesixty/Chart.yaml version
     repository: file://charts/threesixty
     condition: threesixty.enabled
 
-  - name: elasticsearch
-    version: 0.1.0
+  - name: elasticsearch  # Legacy single-node Elasticsearch (if used)
+    version: 1.0.0  # Must match charts/elasticsearch/Chart.yaml version
     repository: file://charts/elasticsearch
-    condition: elasticsearch.enabled
+    condition: elasticsearch.enabled  # Set elasticsearch.enabled: false in values to disable
 
-  - name: opensearch
-    version: 0.1.0
+  - name: opensearch  # OpenSearch cluster for hybridsearch backend
+    version: 1.0.0  # Must match charts/opensearch/Chart.yaml version
     repository: file://charts/opensearch
     condition: opensearch.enabled
 
-  - name: hybridsearch
-    version: 0.1.0
+  - name: hybridsearch  # Ollama LLM + OI-RAG + Remote Agent services
+    version: 1.0.0  # Must match charts/hybridsearch/Chart.yaml version
     repository: file://charts/hybridsearch
-    condition: hybridsearch.enabled
+    condition: hybridsearch.enabled  # Set hybridsearch.enabled: false in values to disable
+
+  - name: ingress  # HTTP ingress routing and TLS termination
+    version: 1.0.0  # Must match charts/ingress/Chart.yaml version
+    repository: file://charts/ingress
+    condition: ingress.enabled
+
+  - name: traefik  # Traefik ingress controller (bundled for local/trial deployments)
+    version: "39.0.5"
+    repository: https://traefik.github.io/charts
+    condition: traefik.enabled

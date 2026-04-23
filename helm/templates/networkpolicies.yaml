@@ -1,0 +1,238 @@
+{{- if .Values.networkPolicy.enabled }}
+# ============================================================
+# NetworkPolicy: Default Deny All Ingress
+# Blocks all ingress to every pod in the namespace by default.
+# Subsequent policies below open only the required paths.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-default-deny-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+{{- if .Values.mongo.enabled }}
+---
+# ============================================================
+# NetworkPolicy: MongoDB
+# Allow ingress from Admin and SCIM on port 27017.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-mongo-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mongo
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-admin
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-scim-server
+      ports:
+        - port: 27017
+          protocol: TCP
+{{- end }}
+{{- if .Values.threesixty.enabled }}
+---
+# ============================================================
+# NetworkPolicy: RabbitMQ
+# Allow ingress from Admin and SCIM on AMQP port 5672.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-rabbitmq-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-admin
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-scim-server
+      ports:
+        - port: 5672
+          protocol: TCP
+---
+# ============================================================
+# NetworkPolicy: Admin
+# Allow ingress from:
+#   - Ingress controller namespace (HTTP port 8080)
+#   - Remote Agent pod (gRPC port 50052)
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-admin-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-admin
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - port: 8080
+          protocol: TCP
+    {{- if .Values.hybridsearch.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-hybridsearch-remoteagent
+      ports:
+        - port: 50052
+          protocol: TCP
+    {{- end }}
+---
+# ============================================================
+# NetworkPolicy: Discovery
+# Allow ingress from the ingress controller namespace on port 8080.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-discovery-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-discovery
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# ============================================================
+# NetworkPolicy: SCIM Server
+# Allow ingress from:
+#   - Admin pod (SCIM token URL — port 8083)
+#   - Ingress controller namespace (port 8083)
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-scim-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-scim-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-admin
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - port: 8083
+          protocol: TCP
+{{- end }}
+{{- if .Values.opensearch.enabled }}
+---
+# ============================================================
+# NetworkPolicy: OpenSearch
+# Allow ingress from:
+#   - OI-RAG pod (port 9200)
+#   - OpenSearch Dashboards pod (port 9200)
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-opensearch-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-opensearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- if .Values.hybridsearch.enabled }}
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-hybridsearch-oirag
+        {{- end }}
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-opensearch-dashboards
+      ports:
+        - port: 9200
+          protocol: TCP
+{{- end }}
+{{- if .Values.hybridsearch.enabled }}
+---
+# ============================================================
+# NetworkPolicy: Ollama
+# Allow ingress from the OI-RAG pod only on port 11434.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-ollama-ingress
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}-hybridsearch-ollama
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ .Release.Name }}-hybridsearch-oirag
+      ports:
+        - port: 11434
+          protocol: TCP
+{{- end }}
+{{- end }}

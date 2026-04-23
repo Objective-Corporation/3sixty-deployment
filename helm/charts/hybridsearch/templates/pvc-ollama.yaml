@@ -1,0 +1,19 @@
+{{- if .Values.ollama.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-ollama-data
+  annotations:
+    # Ollama stores pulled LLM models here. Keeping this PVC avoids re-pulling
+    # multi-GB models on every reinstall.
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "hybridsearch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: llm
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: {{ .Values.ollama.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.ollama.persistence.size }}
+{{- end }}

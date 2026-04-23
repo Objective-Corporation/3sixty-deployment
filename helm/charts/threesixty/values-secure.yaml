@@ -28,9 +28,10 @@ env:
   discovery:
     OAUTH2_ENABLED:     "true"
 
-  rabbitmq:
-    RABBITMQ_DEFAULT_USER: "guest"
-    RABBITMQ_DEFAULT_PASS: "guest"
+  # RabbitMQ credentials are managed via the external Kubernetes secret
+  # {release}-rabbitmq-secret (created by kubectl-create-secrets.ps1 or aks-create-secrets.ps1).
+  # Do NOT set credentials here — they will not be used.
+  rabbitmq: {}
 
   scim:
     SERVER_PORT: "8083"
@@ -45,7 +46,7 @@ image:
   registry: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com
   adminRepo: objective3sixty
   discoveryRepo: objective3sixtydiscovery
-  tag: 5.0.4-RC1
+  tag: 5.2.0            # Change to match version of 3Sixty you want to deploy
   pullPolicy: IfNotPresent
 
 # Service configuration
@@ -89,4 +90,4 @@ ingress:
   tls:
     - secretName: traefik-tls
       hosts:
-        - localhost 
+        - tcc01.local

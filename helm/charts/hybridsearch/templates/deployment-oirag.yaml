@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-oirag
+  labels:
+    {{- include "hybridsearch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oi-rag
+    app: {{ include "hybridsearch.fullname" . }}-oirag
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "hybridsearch.fullname" . }}-oirag
+  template:
+    metadata:
+      labels:
+        app: {{ include "hybridsearch.fullname" . }}-oirag
+    spec:
+      imagePullSecrets:
+{{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      securityContext:
+        {{- toYaml .Values.oirag.podSecurityContext | nindent 8 }}
+      containers:
+        - name: oi-rag
+          image: "{{ .Values.oirag.image.repository }}:{{ .Values.oirag.image.tag }}"
+          imagePullPolicy: {{ .Values.oirag.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.oirag.containerSecurityContext | nindent 12 }}
+          envFrom:
+          - configMapRef:
+              name: {{ include "hybridsearch.fullname" . }}-oirag-config
+          - secretRef:
+              name: {{ include "hybridsearch.fullname" . }}-oirag-secret
+          resources:
+            {{- toYaml .Values.oirag.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.oirag.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.oirag.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.oirag.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          ports:
+            - name: http
+              containerPort: {{ .Values.oirag.service.port }}
+          volumeMounts:
+            - name: logs
+              mountPath: {{ .Values.oirag.logs.emptyDir | default "/oi-rag-logs" }}
+      volumes:
+        - name: logs
+          emptyDir: {}

@@ -104,11 +104,13 @@ docker compose -f docker-compose.oi-agent.yaml up -d
 ---
 
 ## Access URLs
-| Service              | URL                                                                        |
-|----------------------|----------------------------------------------------------------------------|
-| Admin UI             | [https://localhost/3sixty-admin/](https://localhost/3sixty-admin/)         |
-| Discovery UI         | [https://localhost/3sixty-discovery/](https://localhost/3sixty-discovery/) |
-| OpenSearch Dashboard | [http://localhost:15601](http://localhost:15601)                           |
+| Service              | URL                                                                                      |
+|----------------------|------------------------------------------------------------------------------------------|
+| Admin UI             | [https://localhost/3sixty-admin/](https://localhost/3sixty-admin/)                       |
+| Discovery UI         | [https://localhost/3sixty-discovery/](https://localhost/3sixty-discovery/)               |
+| OpenSearch Dashboard | [https://localhost/opensearch-dashboard/](https://localhost/opensearch-dashboard/)       |
+| Kibana (optional)    | [https://localhost/kibana](https://localhost/kibana) - requires `make elasticsearch-start` |
+| RabbitMQ Management  | [http://localhost:15672](http://localhost:15672)                                         |
 
 Certificates are loaded from `./nginx/certs/tls.crt & ./nginx/certs/tls.key`
 

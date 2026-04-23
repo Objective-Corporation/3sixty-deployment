@@ -1,0 +1,16 @@
+# ====================================================================
+# INGRESS SUBCHART VERSIONING
+# ====================================================================
+# This subchart manages all HTTP ingress routing and TLS termination
+# for the 3Sixty stack. Keeping ingress separate from application
+# subcharts allows ingress to be toggled and configured independently.
+#
+# version: Update when modifying this subchart's templates or values
+#   - Must update parent Chart.yaml dependency version to match
+# ====================================================================
+
+apiVersion: v2
+name: ingress
+description: Ingress subchart for 3Sixty stack - manages HTTP routing and TLS termination
+type: application
+version: 1.0.0

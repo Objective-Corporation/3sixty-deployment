@@ -1,3 +1,10 @@
+# =============================================================================
+# HashiCorp Vault - Development Mode
+# =============================================================================
+# WARNING: This is DEV MODE ONLY - data is stored in memory and lost on restart
+# For production, use proper Vault setup with persistent storage
+# =============================================================================
+
 services:
   vault:
     image: hashicorp/vault:1.9.0
@@ -5,11 +12,30 @@ services:
     ports:
       - "8200:8200"
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
       VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
-    command: server -dev -dev-root-token-id=root -dev-listen-address=0.0.0.0:8200
+    command: server -dev -dev-root-token-id=${VAULT_DEV_ROOT_TOKEN_ID:-root} -dev-listen-address=0.0.0.0:8200
     networks:
       - threesixty
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
 
 networks:
   threesixty:

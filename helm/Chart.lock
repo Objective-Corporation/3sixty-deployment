@@ -1,0 +1,24 @@
+dependencies:
+- name: mongo
+  repository: file://charts/mongo
+  version: 1.0.0
+- name: threesixty
+  repository: file://charts/threesixty
+  version: 1.0.0
+- name: elasticsearch
+  repository: file://charts/elasticsearch
+  version: 1.0.0
+- name: opensearch
+  repository: file://charts/opensearch
+  version: 1.0.0
+- name: hybridsearch
+  repository: file://charts/hybridsearch
+  version: 1.0.0
+- name: ingress
+  repository: file://charts/ingress
+  version: 1.0.0
+- name: traefik
+  repository: https://traefik.github.io/charts
+  version: 39.0.5
+digest: sha256:8255cb7df5eeadfeee5fbed093e33e793271b7c0ed0ba2ec8b6d9d300cf43926
+generated: "2026-03-16T22:50:03.6170533+10:00"

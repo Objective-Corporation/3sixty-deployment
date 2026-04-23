@@ -1,6 +1,21 @@
+# ====================================================================
+# HYBRIDSEARCH SUBCHART VERSIONING
+# ====================================================================
+# This subchart deploys hybridsearch components: Ollama, OI-RAG, and Remote Agent.
+#
+# version: Update when modifying this subchart's templates or values
+#   - Template changes, resource updates, config modifications
+#   - Must update parent Chart.yaml dependency version to match
+#
+# appVersion: Update when changing Ollama or OI-RAG image tags
+#   - Compound version: "Ollama version_OI-RAG version" (+ is invalid in K8s label values)
+#   - Example: "0.7.0_5.0.1-RC3" = Ollama 0.7.0 + OI-RAG 5.0.1-RC3
+#   - See values.yaml image.tag fields for ollama and oirag
+# ====================================================================
+
 apiVersion: v2
 name: hybridsearch
-description: Ollama LLM server + Objective RAG agent
+description: Hybridsearch subchart with Ollama LLM, OI-RAG agent, and Remote Agent
 type: application
-version: 0.1.0
-appVersion: "0.7.0+5.0.1-RC3"
+version: 1.0.0  # Subchart version - update when modifying templates/values
+appVersion: "0.7.0_5.0.1-RC3"  # Compound version: Ollama_OI-RAG - update when changing image tags

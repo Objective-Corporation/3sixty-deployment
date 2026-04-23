@@ -1,0 +1,87 @@
+# =============================================================================
+# Prometheus Alert Rules for 3Sixty
+# =============================================================================
+groups:
+  - name: container_alerts
+    interval: 30s
+    rules:
+      - alert: ContainerDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.job }} is down"
+          description: "Container {{ $labels.job }} has been down for more than 2 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} is using {{ $value }}% of memory limit."
+
+      - alert: HighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.name }}"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value }}%."
+
+  - name: host_alerts
+    interval: 30s
+    rules:
+      - alert: HostOutOfMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host out of memory"
+          description: "Node memory is filling up (< 10% left)\n  VALUE = {{ $value }}"
+
+      - alert: HostOutOfDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"} < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host out of disk space"
+          description: "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}"
+
+      - alert: HostHighCpuLoad
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host high CPU load"
+          description: "CPU load is > 80%\n  VALUE = {{ $value }}"
+
+  - name: service_health_alerts
+    interval: 30s
+    rules:
+      - alert: ServiceUnhealthy
+        expr: container_health_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.name }} is unhealthy"
+          description: "Health check for {{ $labels.name }} has been failing for more than 2 minutes."
+
+  - name: storage_alerts
+    interval: 30s
+    rules:
+      - alert: VolumeAlmostFull
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Volume {{ $labels.mountpoint }} almost full"
+          description: "Volume {{ $labels.mountpoint }} is {{ $value }}% full."

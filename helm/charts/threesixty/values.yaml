@@ -5,60 +5,119 @@ image:
   registry: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com
   adminRepo: objective3sixty
   discoveryRepo: objective3sixtydiscovery
-  tag: 5.0.4-RC1
+  tag: 5.2.0
   pullPolicy: IfNotPresent
 
 service:
-  type: ClusterIP
+  type: ClusterIP   
   adminPort: 8080
   discoveryPort: 8080
+
+#Modified to expose the grpc and admin ports
+ports:
+  http:
+    name: http
+    containerPort: 8080
+    servicePort: 8080
+  grpc:
+    name: grpc
+    containerPort: 50052
+    servicePort: 50052
 
 rabbitmq:
   image:
     repository: rabbitmq
     tag: "4.1-management"
     pullPolicy: IfNotPresent
-  username: "guest"
-  password: "guest"
+  # username and password are managed externally via {release}-admin-secret
+  # and {release}-rabbitmq-secret — see setup scripts.
   service:
     type: ClusterIP
     ports:
       amqp: 5672
-      management: 15672
+      # management: 15672 — removed (H-08). Use: kubectl port-forward svc/<release>-rabbitmq 15672:15672 -n <namespace>
 
 scim:
+  enabled: true
   image:
     repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver
     tag: "1.0.5"
     pullPolicy: IfNotPresent
   config:
     serverPort: 8083
-  credentials:
-    username: scim-application-admin
-    password: changeit
+  # credentials (username, password) are managed externally via {release}-scim-secret
+  # — see setup scripts.
   service:
     type: ClusterIP
     port: 8083
 
-ingress:
-  ingressClassName: traefik
-  tls:
-    - secretName: traefik-tls
-      hosts:
-        - localhost
+# MongoDB credentials are managed externally via {release}-admin-secret and
+# {release}-scim-secret (URIs are built by the setup scripts).
+# No mongodb values remain here — see kubectl-create-secrets.ps1 for
+# MONGO_DATABASE / MONGO_SCIM_DATABASE variables.
 
-# MongoDB configuration
-mongodb:
-  username: "dbuser"
-  password: "dbpassword"
-  database: "dbtest"
-  scimDatabase: "scim-database"
+# OAuth2 credentials (CLIENT_ID, TENANT_ID, CLIENT_SECRET, SCOPES) are managed
+# externally via {release}-oauth2-secret — see kubectl-create-secrets.ps1 or
+# aks-create-secrets.ps1. They are NOT chart values.
 
-# OAuth2 configuration for Discovery service
-oauth2:
-  clientId: "your-azure-client-id"
-  tenantId: "your-azure-tenant-id"
-  clientSecret: "your-azure-client-secret"
+# Pod and container security contexts.
+# runAsUser / runAsGroup: the UID/GID the process runs as inside the container.
+# fsGroup: GID applied to mounted volumes — the app user must be a member of this group
+#          to read/write persistent data (PVCs). Set to the same GID as the app group.
+# Required OS-level permissions for these UIDs:
+#   UID 1000 / GID 1000: standard non-root app user. No special host privileges needed.
+#   The service account for these pods should have NO cluster-level permissions.
+#   Namespace-scoped Role (if needed): read ConfigMaps and Secrets in own namespace only.
+podSecurityContext: {}
+  # NOTE: 3Sixty Tomcat images run chmod on WAR files at startup and require
+  # their native container user (typically root or a tomcat user).
+  # runAsNonRoot / runAsUser cannot be enforced until the images are rebuilt
+  # to set correct file ownership at build time. Track as security backlog item.
+  # runAsNonRoot: true
+  # runAsUser: 1000
+  # runAsGroup: 1000
+  # fsGroup: 1000
+
+containerSecurityContext: {}
+  # NOTE: 3Sixty images use gosu/su to switch from root to a tomcat user at startup.
+  # This requires CAP_SETUID / CAP_SETGID, which are removed by capabilities.drop: ALL.
+  # allowPrivilegeEscalation: false also interferes with the user switch.
+  # Security hardening of these containers requires the images to be rebuilt to start
+  # directly as the correct non-root user (no runtime user switching).
+  # Track alongside H-02a.
+  # allowPrivilegeEscalation: false
+  # capabilities:
+  #   drop: ["ALL"]
+
+resources:
+  admin:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  discovery:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  scim:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  rabbitmq:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
 
 env:
   admin:
@@ -67,13 +126,10 @@ env:
     GRPC_SERVER_START:  "true"
     GRPC_SERVER_SSL:    "false"
     GLOBAL_ORG:         "objective"
+    MODULE_COPILOT_AGENT_ENABLED: "true"
 
   discovery:
     OAUTH2_ENABLED:     "true"
-
-  rabbitmq:
-    RABBITMQ_DEFAULT_USER: "guest"
-    RABBITMQ_DEFAULT_PASS: "guest"
 
   scim:
     SERVER_PORT: "8083"

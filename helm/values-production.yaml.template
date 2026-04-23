@@ -1,0 +1,252 @@
+# ====================================================================
+# PRODUCTION VALUES TEMPLATE
+# ====================================================================
+#
+# Instructions:
+# 1. Copy this file: cp values-production.yaml.template values-production.yaml
+# 2. Replace all CHANGE_ME values with your actual credentials
+# 3. NEVER commit values-production.yaml to Git (it's in .gitignore)
+# 4. Deploy with: helm install threesixty-stack . -n threesixty -f values-production.yaml
+#
+# Storage locations for values-production.yaml:
+# - Keep it on your local machine (secure workstation only)
+# - Store encrypted copy in team SharePoint/OneDrive
+# - Use a password manager (1Password, LastPass, Azure DevOps Library)
+#
+# ====================================================================
+# SECRET MANAGEMENT
+# ====================================================================
+#
+# DEFAULT: Run ./kubectl-create-secrets.sh (requires direct kubectl access).
+# ALTERNATIVE: Run ./aks-create-secrets.sh (uses az aks command invoke — no direct cluster access needed).
+#
+# Secrets created EXTERNALLY by the setup scripts — do NOT set here:
+#   {release}-rabbitmq-secret                → RABBITMQ_DEFAULT_USER / PASS
+#   {release}-mongo-init-secret              → MONGO_INITDB_ROOT_USERNAME / PASSWORD
+#   {release}-opensearch-admin-secret        → OPENSEARCH_INITIAL_ADMIN_PASSWORD
+#   {release}-hybridsearch-oirag-secret      → OPENSEARCH_PASSWORD, BEARER_TOKEN
+#   {release}-hybridsearch-remoteagent-secret → REMOTE_AGENT_TOKEN, SSL_CA_PASSWORD
+#   {release}-oauth2-secret                  → CLIENT_ID, TENANT_ID, CLIENT_SECRET, SCOPES
+#
+# Secrets still managed by HELM from this file (see remediation C-02):
+#   {release}-admin-secret         → MongoDB URI, RabbitMQ credentials
+#   {release}-mongodb-secret       → MongoDB username/password
+#   {release}-scim-secret          → SCIM MongoDB connection string, RabbitMQ credentials
+# ====================================================================
+
+# ====================================================================
+# NETWORK POLICIES (H-01 remediation)
+# ====================================================================
+# Set enabled: true to activate default-deny-ingress NetworkPolicies.
+# Set ingressNamespace to the namespace your Traefik ingress controller runs in.
+networkPolicy:
+  enabled: true
+  ingressNamespace: "threesixty"  # Same namespace when traefik.enabled: true; change to "traefik" if Traefik is installed separately
+
+# Toggle each sub-chart on/off (same as main values.yaml)
+traefik:
+  enabled: true  # Deploy Traefik ingress controller as part of this chart
+  ports:
+    web:
+      exposedPort: 7070   # Host port — change to 80 for production (AKS/EKS LoadBalancer)
+      http:
+        redirections:
+          entryPoint:
+            to: websecure   # Redirect HTTP -> HTTPS
+            scheme: https
+    websecure:
+      exposedPort: 7443   # Host port — change to 443 for production (AKS/EKS LoadBalancer)
+  service:
+    type: LoadBalancer  # Docker Desktop / bare-metal: LoadBalancer. AKS: LoadBalancer. EKS: LoadBalancer.
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  # REQUIRED: Set host to your actual domain. This controls both the ingress routing
+  # rule (which hostnames the ingress responds to) and the TLS SNI entry.
+  host: CHANGE_ME_domain.com
+  tls:
+    - secretName: traefik-tls
+      hosts:
+        - CHANGE_ME_domain.com  # Must match host above
+  services:
+    # OpenSearch REST API — exposed for external RAG systems connecting to the embedding index.
+    # External clients connect to: https://CHANGE_ME_domain.com/opensearch
+    # NOTE: if the RAG client requires a bare base URL with no path prefix, configure a
+    # Traefik stripPrefix middleware and reference it via the annotations block.
+    opensearch:
+      enabled: true
+      path: /opensearch
+      port: 9200
+    # OpenSearch Dashboards — analytics and index management UI.
+    dashboards:
+      enabled: true
+      path: /opensearch-dashboards
+      port: 5601
+
+# ====================================================================
+# STORAGE CLASSES
+# ====================================================================
+# The default chart values use 'local-path' (k3s only). Override here
+# for your target platform. Uncomment the appropriate storageClass line
+# for each subchart.
+#
+# Platform reference:
+#   Docker Desktop (local)  : ""            (uses 'docker-desktop' default hostpath provisioner)
+#   k3s / Rancher Desktop   : local-path
+#   EKS (AWS)               : gp2           (legacy) or gp3 (recommended — requires EBS CSI driver)
+#   AKS (Azure)             : managed-csi   (standard SSD) or managed-csi-premium (premium SSD)
+#   Longhorn                : longhorn
+#
+# To list available StorageClasses on your cluster:
+#   kubectl get storageclass
+# ====================================================================
+
+mongo:
+  enabled: true
+  persistence:
+    storageClass: "CHANGE_ME"  # See storage class reference above
+    # storageClass: ""              # Docker Desktop
+    # storageClass: "local-path"    # k3s / Rancher Desktop
+    # storageClass: "gp2"           # EKS (legacy) — or "gp3" with EBS CSI driver
+    # storageClass: "managed-csi"   # AKS standard SSD — or "managed-csi-premium"
+    # storageClass: "longhorn"       # Longhorn
+  # init credentials are now managed externally via {release}-mongo-init-secret
+  # Set MONGO_ROOT_USERNAME and MONGO_ROOT_PASSWORD in your setup script instead.
+
+elasticsearch:
+  enabled: false
+  persistence:
+    storageClass: "CHANGE_ME"  # See storage class reference above (same options as mongo)
+
+opensearch:
+  enabled: true
+  persistence:
+    storageClass: "CHANGE_ME"  # See storage class reference above (same options as mongo)
+
+hybridsearch:
+  enabled: true
+
+# Global settings
+global:
+  imagePullSecrets:
+    - name: ecr-registry-secret
+
+# ====================================================================
+# THREESIXTY SECRETS (Sub-chart configuration)
+# ====================================================================
+# These values override the defaults in charts/threesixty/values.yaml
+# ====================================================================
+
+threesixty:
+  # All credentials (RabbitMQ, SCIM, MongoDB, OAuth2) are managed externally
+  # via the setup scripts. Set the following variables in kubectl-create-secrets.ps1
+  # (or aks-create-secrets.ps1) before running helm install:
+  #
+  #   RABBITMQ_USER / RABBITMQ_PASS  → {release}-rabbitmq-secret + {release}-admin-secret
+  #   SCIM_USERNAME / SCIM_PASSWORD  → {release}-admin-secret + {release}-scim-secret
+  #   MONGO_ROOT_USERNAME / PASSWORD → {release}-mongo-init-secret + URIs in admin/scim secrets
+  #   OAUTH2_CLIENT_ID / TENANT / SECRET → {release}-oauth2-secret
+  #
+  # No credential values belong in this file.
+  #
+  # CONFIGURATION HIERARCHY NOTE:
+  # RABBITMQ_HOST below must equal "${RELEASE_NAME}-rabbitmq" where RELEASE_NAME
+  # matches the RELEASE variable in the Makefile (default: threesixty-stack).
+  # The secrets scripts derive the same service name from their RELEASE_NAME variable.
+  # If you change the Makefile RELEASE, update RABBITMQ_HOST and RELEASE_NAME in
+  # both secrets scripts to match.
+
+  # Environment Variables
+  env:
+    admin:
+      RABBITMQ_HOST: "threesixty-stack-rabbitmq"  # = ${RELEASE_NAME}-rabbitmq
+      RABBITMQ_QUEUE: "scim-queue"
+      # RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS must NOT be set here —
+      # they are injected from {release}-admin-secret via secretRef to avoid
+      # leaking credentials into the admin ConfigMap.
+      GRPC_SERVER_START: "true"
+      GRPC_SERVER_SSL: "false"
+      GLOBAL_ORG: "objective"
+      MODULE_COPILOT_AGENT_ENABLED: "true"
+
+    discovery:
+      OAUTH2_ENABLED: "true"
+
+    scim:
+      SERVER_PORT: "8083"
+      RABBITMQ_HOST: "threesixty-stack-rabbitmq"
+      RABBITMQ_PORT: "5672"
+      # RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS must NOT be set here —
+      # the scim ConfigMap template does a blind range over env.scim and would
+      # emit credentials as plaintext ConfigMap data. They are loaded from
+      # {release}-scim-secret via secretRef instead.
+      RABBITMQ_QUEUE_NAME: "scim-queue"
+      RABBITMQ_EXCHANGE_NAME: "scim-exchange"
+      RABBITMQ_ROUTING_KEY: "scim.routingkey"
+  
+# ====================================================================
+# HYBRIDSEARCH CONFIGURATION
+# ====================================================================
+
+hybridsearch:
+  # Ollama model storage — defaults to cluster default StorageClass (storageClass: "").
+  # Override here if your cluster default is not appropriate (e.g. EKS gp2 vs gp3).
+  ollama:
+    persistence:
+      storageClass: ""          # "" = cluster default (recommended — Ollama just needs block storage)
+      # storageClass: "gp3"     # EKS: explicitly request gp3
+      # storageClass: "longhorn" # Longhorn
+
+  # OI-RAG Service Configuration
+  oirag:
+    env:
+      OPENAI_API_BASE: "http://threesixty-stack-ollama:11434/v1"  # OpenAI-compatible API endpoint (K8s internal DNS)
+      OPENSEARCH_URL: "http://threesixty-stack-opensearch:9200"   # OpenSearch cluster URL (K8s internal DNS)
+      OPENSEARCH_USER: "CHANGE_ME"   # OpenSearch admin username (default: admin) - NOT a secret
+      # OPENSEARCH_PASSWORD and BEARER_TOKEN are managed externally via {release}-hybridsearch-oirag-secret
+      # Set OPENSEARCH_PASSWORD and OIRAG_BEARER_TOKEN in your setup script instead.
+      # APPROACH A (kubectl): kubectl-create-secrets.sh
+      # APPROACH B (AKS):     aks-create-secrets.sh
+      #
+      # OPENSEARCH_PASSWORD: "CHANGE_ME"  # #EXTERNAL - use setup script
+      # BEARER_TOKEN: "CHANGE_ME"         # #EXTERNAL - use setup script
+
+  # Remote Agent Configuration
+  remoteagent:
+    env:
+      REMOTE_AGENT_NAME: "CHANGE_ME"       # Name identifier for this agent instance (e.g., ragtest)
+      REMOTE_SERVER_URL: "http://threesixty-stack-admin:8080/3sixty-admin"  # 3Sixty admin server URL
+      # REMOTE_AGENT_TOKEN and SSL_CA_PASSWORD are managed externally via {release}-hybridsearch-remoteagent-secret
+      # Set REMOTE_AGENT_TOKEN and SSL_CA_PASSWORD in your setup script instead.
+      # APPROACH A (kubectl): kubectl-create-secrets.sh
+      # APPROACH B (AKS):     aks-create-secrets.sh
+      #
+      # REMOTE_AGENT_TOKEN: "CHANGE_ME"   # #EXTERNAL - use setup script
+      # SSL_CA_PASSWORD: "CHANGE_ME"      # #EXTERNAL - use setup script
+
+# ====================================================================
+# OPTIONAL: MongoDB External Connection (if using external MongoDB)
+# ====================================================================
+# If mongo.enabled: false and you're using external MongoDB:
+#
+# threesixty:
+#   mongodb:
+#     # External MongoDB connection
+#     host: "your-mongo-host.example.com"  # or IP address
+#     port: 27017
+#     username: "CHANGE_ME"
+#     password: "CHANGE_ME"
+#     database: "simflofy"
+#     scimDatabase: "scim-database"
+#     # Optional: connection string parameters
+#     connectionOptions: "?authSource=admin&ssl=true"
+
+# ====================================================================
+# Notes:
+# ====================================================================
+# - All passwords should be at least 16 characters
+# - Use different passwords for each service
+# - Consider using a password generator
+# - Document where you store this file in your team wiki
+# ====================================================================

@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threesixty.fullname" . }}-admin
+  labels:
+    {{- include "threesixty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+    app: {{ include "threesixty.fullname" . }}-admin
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "threesixty.fullname" . }}-admin
+  template:
+    metadata:
+      labels:
+        app: {{ include "threesixty.fullname" . }}-admin
+    spec:
+      imagePullSecrets:
+{{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # initContainers:
+      #   - name: wait-for-mongo
+      #     image: busybox:1.36
+      #     command: ['sh', '-c', 'until nc -z {{ .Release.Name }}-mongo 27017; do echo "waiting for mongodb"; sleep 2; done']
+      #     securityContext:
+      #       runAsNonRoot: true
+      #       runAsUser: 1000
+      #       allowPrivilegeEscalation: false
+      #       capabilities:
+      #         drop: ["ALL"]
+      containers:
+        - name: threesixty-admin
+          image: "{{ .Values.image.registry }}/{{ .Values.image.adminRepo }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: {{ .Values.ports.http.name }}
+              containerPort: {{ .Values.ports.http.containerPort }}
+              protocol: TCP
+            - name: {{ .Values.ports.grpc.name }}
+              containerPort: {{ .Values.ports.grpc.containerPort }}
+              protocol: TCP            
+          env:
+            {{- if contains "afs" .Values.image.tag }}
+            - name: APP_URI
+              value: "/afs-admin"
+            {{- else }}
+            - name: APP_URI
+              value: "/3sixty-admin"
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "threesixty.fullname" . }}-admin-config
+            - secretRef:
+                name: {{ .Release.Name }}-admin-secret
+          resources:
+            {{- toYaml .Values.resources.admin | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /3sixty-admin/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /3sixty-admin/health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /3sixty-admin/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30

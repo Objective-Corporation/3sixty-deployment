@@ -1,0 +1,75 @@
+# =============================================================================
+# Prometheus Configuration for 3Sixty Monitoring
+# =============================================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: '3sixty-local'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Node Exporter (host metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+
+  # MongoDB Exporter
+  # Uncomment when MongoDB exporter is added
+  # - job_name: 'mongodb'
+  #   static_configs:
+  #     - targets: ['mongodb-exporter:9216']
+  #       labels:
+  #         service: 'mongodb'
+
+  # Nginx Exporter
+  # Uncomment when Nginx exporter is added
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['nginx-exporter:9113']
+  #       labels:
+  #         service: 'nginx'
+
+  # RabbitMQ Exporter
+  # Uncomment when RabbitMQ management plugin metrics are available
+  # - job_name: 'rabbitmq'
+  #   static_configs:
+  #     - targets: ['rabbitmq:15692']
+  #       labels:
+  #         service: 'rabbitmq'
+
+  # OpenSearch/Elasticsearch metrics
+  # Uncomment when exporter is added
+  # - job_name: 'opensearch'
+  #   static_configs:
+  #     - targets: ['opensearch-exporter:9114']
+  #       labels:
+  #         service: 'opensearch'

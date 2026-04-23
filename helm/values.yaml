@@ -9,13 +9,29 @@ scim:
   enabled: true
 
 elasticsearch:
-  enabled: true
+  enabled: false
 
 opensearch:
   enabled: true
 
 hybridsearch:
   enabled: true
+
+ingress:
+  enabled: true
+
+traefik:
+  enabled: false  # Set true to deploy Traefik ingress controller as part of this chart (trial/local use)
+
+# NetworkPolicy — default-deny-ingress baseline with per-flow allow rules
+# Set enabled: true to activate NetworkPolicies (required for H-01 remediation)
+# ingressNamespace: the namespace your ingress controller (Traefik) runs in.
+# When traefik.enabled: true above, Traefik is deployed into the same namespace as
+# this chart, so ingressNamespace should match (e.g. "threesixty").
+# When Traefik is installed separately (e.g. "traefik" namespace), set accordingly.
+networkPolicy:
+  enabled: false
+  ingressNamespace: "threesixty"
 
 # Global settings (shared across all sub‑charts)
 global:

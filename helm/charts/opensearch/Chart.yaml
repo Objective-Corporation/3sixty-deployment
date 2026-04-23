@@ -1,6 +1,20 @@
+# ====================================================================
+# OPENSEARCH SUBCHART VERSIONING
+# ====================================================================
+# This subchart deploys OpenSearch cluster with Dashboards.
+#
+# version: Update when modifying this subchart's templates or values
+#   - Template changes, resource updates, config modifications
+#   - Must update parent Chart.yaml dependency version to match
+#
+# appVersion: Update when changing OpenSearch image tag
+#   - Tracks OpenSearch version (e.g., 2.4.1)
+#   - See values.yaml image.tag field
+# ====================================================================
+
 apiVersion: v2
 name: opensearch
-description: OpenSearch + Dashboards single-node
+description: OpenSearch cluster with Dashboards subchart for 3Sixty hybrid search backend
 type: application
-version: 0.1.0
-appVersion: "2.4.1"
+version: 1.0.0  # Subchart version - update when modifying templates/values
+appVersion: "2.4.1"  # OpenSearch version - update when changing image tag

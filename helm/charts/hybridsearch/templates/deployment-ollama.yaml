@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-ollama
+  labels:
+    {{- include "hybridsearch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: llm
+    app: {{ include "hybridsearch.fullname" . }}-ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "hybridsearch.fullname" . }}-ollama
+  template:
+    metadata:
+      labels:
+        app: {{ include "hybridsearch.fullname" . }}-ollama
+    spec:
+      securityContext:
+        {{- toYaml .Values.ollama.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ollama
+          image: "{{ .Values.ollama.image.repository }}:{{ .Values.ollama.image.tag }}"
+          imagePullPolicy: {{ .Values.ollama.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.ollama.containerSecurityContext | nindent 12 }}
+          command: ["bash","-c"]
+          args:
+            - >
+              ollama serve &
+              sleep 5 &&
+              ollama pull {{ .Values.ollama.model }} &&
+              wait
+          resources:
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+          # Ollama pulls the model on first start — startupProbe allows up to 10 minutes
+          startupProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.ollama.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.ollama.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.ollama.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          ports:
+            - name: api
+              containerPort: {{ .Values.ollama.service.port }}
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-data
+          persistentVolumeClaim:
+            claimName: {{ include "hybridsearch.fullname" . }}-ollama-data

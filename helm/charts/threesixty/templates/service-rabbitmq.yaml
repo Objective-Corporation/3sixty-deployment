@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threesixty.fullname" . }}-rabbitmq
+spec:
+  type: {{ .Values.rabbitmq.service.type }}
+  selector:
+    app: {{ include "threesixty.fullname" . }}-rabbitmq
+  ports:
+    - name: amqp
+      port: {{ .Values.rabbitmq.service.ports.amqp }}
+      targetPort: {{ .Values.rabbitmq.service.ports.amqp }}
+    # Management port 15672 intentionally omitted — use kubectl port-forward for admin access.

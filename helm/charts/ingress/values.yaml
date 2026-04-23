@@ -1,0 +1,46 @@
+ingressClassName: traefik
+
+# Optional annotations — e.g. Traefik HTTPS redirect middleware or cert-manager issuer.
+# Example (set in values-production.yaml):
+#   annotations:
+#     traefik.ingress.kubernetes.io/router.middlewares: "traefik-redirect-to-https@kubernetescrd"
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+annotations: {}
+
+# REQUIRED: Set this to your actual domain before deploying.
+# This value is used for both the ingress rule host (routing) and the TLS SNI entry.
+# Example: threesixty.objective.com
+host: change-host-now
+
+tls:
+  - secretName: traefik-tls
+    hosts:
+      - change-host-now
+
+# Service routing configuration.
+# 'path' controls the URL prefix exposed through the ingress.
+# 'port' must match the corresponding service port in the threesixty subchart.
+# Service names are derived from the Helm release name at deploy time.
+services:
+  admin:
+    path: /3sixty-admin
+    port: 8080
+  discovery:
+    path: /3sixty-discovery
+    port: 8080
+  scim:
+    path: /scim/v2
+    port: 8083
+  # OpenSearch REST API — enable for external RAG systems that attach to the embedding index.
+  # NOTE: Traefik will forward the full path to OpenSearch (including the prefix).
+  # External RAG clients must include the path prefix in their base URL, or configure
+  # a Traefik stripPrefix middleware to remove it before forwarding.
+  opensearch:
+    enabled: false
+    path: /opensearch
+    port: 9200
+  # OpenSearch Dashboards — admin/analytics UI. Enable for external operator access.
+  dashboards:
+    enabled: false
+    path: /opensearch-dashboards
+    port: 5601

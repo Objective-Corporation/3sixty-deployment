@@ -1,0 +1,13 @@
+{{- if .Values.scim.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "threesixty.fullname" . }}-scim-config
+  labels:
+    app.kubernetes.io/name: {{ include "threesixty.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  {{- range $key, $value := .Values.env.scim }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

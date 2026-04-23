@@ -1,6 +1,20 @@
+# ====================================================================
+# THREESIXTY SUBCHART VERSIONING
+# ====================================================================
+# This subchart deploys core 3Sixty services: Admin, Discovery, and SCIM.
+#
+# version: Update when modifying this subchart's templates or values
+#   - Template changes, resource updates, config modifications
+#   - Must update parent Chart.yaml dependency version to match
+#
+# appVersion: Update when changing 3Sixty component image tags
+#   - Tracks 3Sixty application version (e.g., 5.1.1)
+#   - See values.yaml image.tag fields for Admin/Discovery/SCIM
+# ====================================================================
+
 apiVersion: v2
 name: threesixty
-description: A Helm chart for 3Sixty admin & discovery services
+description: Core 3Sixty services subchart (Admin, Discovery, SCIM) for Kubernetes deployment
 type: application
-version: 0.1.0
-appVersion: "5.0.3"
+version: 1.0.0  # Subchart version - update when modifying templates/values
+appVersion: "5.2.0"  # 3Sixty application version - update when changing image tags

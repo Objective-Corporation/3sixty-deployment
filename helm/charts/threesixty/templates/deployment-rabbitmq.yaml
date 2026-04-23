@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "threesixty.fullname" . }}-rabbitmq
+  labels:
+    {{- include "threesixty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: message-broker
+    app: {{ include "threesixty.fullname" . }}-rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "threesixty.fullname" . }}-rabbitmq
+  template:
+    metadata:
+      labels:
+        app: {{ include "threesixty.fullname" . }}-rabbitmq
+    spec:
+      # RabbitMQ official image runs as UID/GID 999 (rabbitmq user/group)
+      # UID 999 requires no special host privileges. Service account should
+      # have no cluster-level permissions.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          imagePullPolicy: {{ .Values.rabbitmq.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: amqp
+              containerPort: {{ .Values.rabbitmq.service.ports.amqp }}
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threesixty.fullname" . }}-rabbitmq-secret
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "threesixty.fullname" . }}-rabbitmq-secret
+                  key: RABBITMQ_DEFAULT_PASS
+          resources:
+            {{- toYaml .Values.resources.rabbitmq | nindent 12 }}
+          # RabbitMQ management API (/api/healthchecks/node) requires HTTP basic auth.
+          # Plain httpGet probes return 401. Use tcpSocket on the AMQP port instead,
+          # which confirms the broker is listening without needing credentials.
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.rabbitmq.service.ports.amqp }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.rabbitmq.service.ports.amqp }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.rabbitmq.service.ports.amqp }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensearch.fullname" . }}
+  labels:
+    {{- include "opensearch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search
+    app: {{ include "opensearch.fullname" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "opensearch.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "opensearch.fullname" . }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: opensearch
+          image: "{{ .Values.image.opensearch.repository }}:{{ .Values.image.opensearch.tag }}"
+          imagePullPolicy: {{ .Values.image.opensearch.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          args:
+{{ toYaml .Values.cluster.settings | indent 12 }}
+          env:
+            - name: OPENSEARCH_JAVA_OPTS
+              value: "{{ .Values.javaOpts }}"
+            # OPENSEARCH_INITIAL_ADMIN_PASSWORD sets the 'admin' user password.
+            # Supported natively from OpenSearch 2.12+. On 2.4.1 (current) this
+            # env var is ignored — the demo config default password applies.
+            # ACTION REQUIRED before production:
+            #   1. Upgrade OpenSearch to >= 2.12 (strongly recommended), OR
+            #   2. Use an init container to run securityadmin.sh with a custom
+            #      internal_users.yml containing a bcrypt-hashed password.
+            # The oirag service connects using OPENSEARCH_USER=admin and
+            # OPENSEARCH_PASSWORD from the external secret — these must match
+            # the password configured here.
+            - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensearch.fullname" . }}-admin-secret
+                  key: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}
+            - name: transport
+              containerPort: {{ .Values.service.transportPort }}
+          resources:
+            {{- toYaml .Values.resources.opensearch | nindent 12 }}
+          # OpenSearch 2.x runs the security plugin by default: port 9200 requires
+          # HTTPS and basic auth. Plain httpGet probes will get 401/SSL errors.
+          # tcpSocket probes confirm the port is listening without needing credentials.
+          # For stronger readiness validation, replace with an exec probe using:
+          #   curl -ku admin:$OPENSEARCH_INITIAL_ADMIN_PASSWORD https://localhost:9200/_cluster/health
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.service.httpPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.service.httpPort }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.service.httpPort }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "opensearch.fullname" . }}-data

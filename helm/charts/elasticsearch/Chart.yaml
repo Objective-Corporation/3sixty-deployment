@@ -1,6 +1,20 @@
+# ====================================================================
+# ELASTICSEARCH SUBCHART VERSIONING
+# ====================================================================
+# This subchart deploys a single-node Elasticsearch cluster (legacy).
+#
+# version: Update when modifying this subchart's templates or values
+#   - Template changes, resource updates, config modifications
+#   - Must update parent Chart.yaml dependency version to match
+#
+# appVersion: Update when changing Elasticsearch image tag
+#   - Tracks Elasticsearch version (e.g., 7.17.0)
+#   - See values.yaml image.tag field
+# ====================================================================
+
 apiVersion: v2
 name: elasticsearch
-description: A single‑node Elasticsearch cluster
+description: Single-node Elasticsearch cluster subchart for legacy 3Sixty deployments
 type: application
-version: 0.1.0
-appVersion: "7.17.0"
+version: 1.0.0  # Subchart version - update when modifying templates/values
+appVersion: "7.17.0"  # Elasticsearch version - update when changing image tag

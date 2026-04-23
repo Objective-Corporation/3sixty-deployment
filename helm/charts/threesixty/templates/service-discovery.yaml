@@ -1,0 +1,13 @@
+# templates/discovery-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threesixty.fullname" . }}-discovery
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "threesixty.fullname" . }}-discovery
+  ports:
+    - name: http
+      port: {{ .Values.service.discoveryPort }}
+      targetPort: {{ .Values.service.discoveryPort }}

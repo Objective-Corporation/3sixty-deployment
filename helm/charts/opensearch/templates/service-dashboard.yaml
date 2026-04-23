@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensearch.fullname" . }}-dashboards
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "opensearch.fullname" . }}-dashboards
+  ports:
+    - name: http
+      port: {{ .Values.service.dashboardPort }}
+      targetPort: {{ .Values.service.dashboardPort }}

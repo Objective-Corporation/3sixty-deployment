@@ -1,0 +1,81 @@
+{{/*
+  Derive the threesixty subchart fullname using the same logic as its _helpers.tpl.
+  If the release name already contains "threesixty" the subchart fullname equals the
+  release name (e.g. "threesixty-stack"). Otherwise it is "{release}-threesixty"
+  (e.g. "my-app-threesixty"). This ensures service name lookups work regardless of
+  the release name chosen at deploy time.
+*/}}
+{{- $tsFullname := ternary .Release.Name (printf "%s-threesixty" .Release.Name) (contains "threesixty" .Release.Name) -}}
+{{- $osFullname := ternary .Release.Name (printf "%s-opensearch" .Release.Name) (contains "opensearch" .Release.Name) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  labels:
+    app.kubernetes.io/name: ingress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  # Note: kubernetes.io/ingress.class annotation is deprecated since Kubernetes 1.18.
+  # Use spec.ingressClassName instead (set below).
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: "{{ .Values.ingressClassName }}"
+
+  tls:
+  {{- range .Values.tls }}
+    - secretName: {{ .secretName }}
+      hosts:
+      {{- range .hosts }}
+        - {{ . }}
+      {{- end }}
+  {{- end }}
+
+  rules:
+    # host: restricts this rule to the specified domain only.
+    # Without a host field, the rule matches ALL hostnames on the ingress controller.
+    # Set ingress.host in values-production.yaml to your actual domain.
+    - host: {{ .Values.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.services.admin.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-admin" $tsFullname }}
+                port:
+                  number: {{ .Values.services.admin.port }}
+          - path: {{ .Values.services.discovery.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-discovery" $tsFullname }}
+                port:
+                  number: {{ .Values.services.discovery.port }}
+          - path: {{ .Values.services.scim.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-scim-server" $tsFullname }}
+                port:
+                  number: {{ .Values.services.scim.port }}
+          {{- if .Values.services.opensearch.enabled }}
+          - path: {{ .Values.services.opensearch.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $osFullname }}
+                port:
+                  number: {{ .Values.services.opensearch.port }}
+          {{- end }}
+          {{- if .Values.services.dashboards.enabled }}
+          - path: {{ .Values.services.dashboards.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-dashboards" $osFullname }}
+                port:
+                  number: {{ .Values.services.dashboards.port }}
+          {{- end }}

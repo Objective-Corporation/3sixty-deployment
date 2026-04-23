@@ -1,54 +1,142 @@
 # 3Sixty Kubernetes Deployment
 
-This repository contains Helm charts for deploying all 3Sixty services to Kubernetes clusters.
+Helm charts for deploying the complete 3Sixty application stack to Kubernetes (AKS).
+
+---
+
+## Quick Links
+
+- [Quick Start Guide](QUICK-START.md) — step-by-step deployment instructions
+- [Secrets Management](SECRETS-MANAGEMENT.md) — credential setup and rotation
+- [Makefile reference](#makefile-reference) — automation targets
+
+---
+
+## Architecture
+
+The 3Sixty stack is a parent Helm chart with six subcharts:
+
+| Subchart          | Component(s)                                          | Version |
+| ----------------- | ----------------------------------------------------- | ------- |
+| `threesixty`      | Admin webapp, Discovery webapp, SCIM server, RabbitMQ | 5.2.0   |
+| `mongo`           | MongoDB database                                      | 8.0.11  |
+| `opensearch`      | OpenSearch search engine + Dashboards UI              | 2.4.1   |
+| `hybridsearch`    | Ollama LLM server, OI-RAG service, Remote Agent       | —       |
+| `elasticsearch`   | Legacy single-node Elasticsearch (optional)           | 7.17.0  |
+| `traefik`         | Traefik ingress controller (bundled)                  | 39.0.5  |
+
+Each subchart can be independently enabled or disabled in `values.yaml` / `values-production.yaml`.
 
 ---
 
 ## Prerequisites
 
-- **Kubernetes Cluster** (1.24+)
-- **Helm** ≥ 3.12
-- **kubectl** configured to access your cluster
-- **AWS CLI** ≥ 2 (for ECR authentication)
-- **Traefik Ingress Controller** (recommended) or compatible ingress controller
-  ```bash
-  # Install Traefik using Helm
-  helm repo add traefik https://traefik.github.io/charts
-  helm install traefik traefik/traefik -n traefik --create-namespace
-  ```
-- **TLS Certificate** (see TLS Certificate Setup section below)
+| Tool           | Minimum version | Purpose                                       |
+| -------------- | --------------- | --------------------------------------------- |
+| Kubernetes     | 1.24            | Target cluster                                |
+| Helm           | 3.12            | Chart packaging and lifecycle management      |
+| kubectl        | 1.28            | Cluster access                                |
+| AWS CLI        | 2.0             | ECR registry authentication (image pull)      |
+| Azure CLI      | 2.50            | AKS credential retrieval (AKS deployments)    |
+| OpenSSL        | 3.0             | Self-signed TLS certificate generation        |
+| PowerShell     | 7.0             | Secrets setup scripts (`pwsh`)                |
+
+Check all tools are installed (Linux / macOS / Windows):
+
+```bash
+make check-prerequisites
+```
+
+This prints install instructions for any missing tools on your platform.
 
 ---
 
-## Architecture Overview
+## Secrets Management
 
-The 3Sixty stack consists of the following components deployed as Helm sub-charts:
+All sensitive credentials are stored in Kubernetes Secrets that are **created before Helm runs** — they are never embedded in values files or committed to Git.
 
-| Component | Description | Version |
-|-----------|-------------|---------|
-| **threesixty** | Admin & Discovery web applications + RabbitMQ + SCIM server | 5.0.3 |
-| **mongo** | MongoDB database for data persistence | 8.0.11 |
-| **elasticsearch** | Single-node Elasticsearch cluster | 7.17.0 |
-| **opensearch** | OpenSearch + Dashboards for search and analytics | 2.4.1 |
-| **hybridsearch** | Ollama LLM server + Objective RAG agent | 0.7.0+5.0.1-RC3 |
+Two scripts handle secret creation depending on your cluster access model:
+
+| Script                       | Use when                                             | Platform        |
+| ---------------------------- | ---------------------------------------------------- | --------------- |
+| `kubectl-create-secrets.sh`  | You have direct `kubectl` access (local kubeconfig)  | Linux/macOS/Win |
+| `aks-create-secrets.sh`      | You use `az aks command invoke` (AKS API access)     | Linux/macOS/Win |
+
+See [SECRETS-MANAGEMENT.md](SECRETS-MANAGEMENT.md) for the complete guide.
+
+### Secrets created by setup scripts
+
+- `ecr-registry-secret` — AWS ECR image pull credentials
+- `traefik-tls` — TLS certificate and private key
+- `{release}-rabbitmq-secret` — RabbitMQ credentials
+- `{release}-mongo-init-secret` — MongoDB root credentials
+- `{release}-opensearch-admin-secret` — OpenSearch admin password
+- `{release}-hybridsearch-oirag-secret` — OI-RAG service credentials
+- `{release}-hybridsearch-remoteagent-secret` — Remote Agent credentials
+
+### Secrets managed by Helm (from values-production.yaml)
+
+- OAuth2 / OIDC credentials for Discovery and Admin
+- SCIM server credentials
+- MongoDB connection strings
+
+---
+
+## Configuration Hierarchy
+
+Understanding which file is authoritative for each setting prevents drift between the secrets scripts, Helm values, and the deployed chart.
+
+```text
+values-production.yaml         ← AUTHORITATIVE: all deployment config overrides
+Chart.yaml (appVersion)        ← INFORMATIONAL: tracks the app version (not used by templates)
+kubectl-create-secrets.sh      ← AUTHORITATIVE: all credential values + derived URIs
+  │
+  ├── NAMESPACE        must match Makefile NAMESPACE (default: threesixty)
+  ├── RELEASE_NAME     must match Makefile RELEASE   (default: threesixty-stack)
+  └── RELEASE_NAME-mongo  →  MONGO_HOST used in MongoDB URI
+                              must match values-production.yaml env.admin.RABBITMQ_HOST prefix
+```
+
+### Key invariants
+
+| Setting | Defined in | Read by |
+| ------- | ---------- | ------- |
+| `NAMESPACE` | Makefile `NAMESPACE ?=` | All `kubectl` and `helm` targets; secrets scripts |
+| `RELEASE` / `RELEASE_NAME` | Makefile `RELEASE ?=` and top of secrets script | Helm release name; Kubernetes secret names; service DNS names |
+| `image.tag` | `charts/threesixty/values.yaml` (default) or `values-production.yaml` | Deployment templates — **not** read from `Chart.yaml appVersion` |
+| `ingress.host` / `ingress.tls.hosts` | `values-production.yaml` | `charts/ingress/templates/ingress.yaml` — defaults in subchart `values.yaml` are placeholders only |
+| Credentials | Top of `kubectl-create-secrets.sh` (or `aks-create-secrets.sh`) | Never in Helm values. Stored only in Kubernetes Secrets. |
+
+### Changing the release name or namespace
+
+If you change `RELEASE` or `NAMESPACE` from their defaults, update **all three places** consistently:
+
+| File | Setting |
+| ---- | ------- |
+| Makefile | `RELEASE ?= threesixty-stack` and `NAMESPACE ?= threesixty` |
+| `kubectl-create-secrets.sh` | `RELEASE_NAME=` and `NAMESPACE=` near the top |
+| `aks-create-secrets.sh` | `RELEASE_NAME=` and `--namespace` argument default |
+| `values-production.yaml` | `env.admin.RABBITMQ_HOST: "<release>-rabbitmq"` |
+
+### Platform support
+
+All tooling (Makefile, secrets scripts) runs natively on **Linux, macOS, and Windows (Git Bash)**. No PowerShell is required.
+
+The Helm charts and values files are entirely platform-agnostic — they are pure YAML interpreted by Helm.
 
 ---
 
 ## Configuration
 
-### Main Chart Configuration
+### Enable/Disable Subcharts
 
-The main `values.yaml` file allows you to enable/disable individual components:
+In `values.yaml` (default) or `values-production.yaml`:
 
 ```yaml
-# Toggle each sub-chart on/off
 mongo:
   enabled: true
 
 threesixty:
-  enabled: true
-
-elasticsearch:
   enabled: true
 
 opensearch:
@@ -57,443 +145,210 @@ opensearch:
 hybridsearch:
   enabled: true
 
-# Global settings (shared across all sub-charts)
-global:
-  imagePullSecrets:
-    - name: ecr-registry-secret
+elasticsearch:
+  enabled: false   # Legacy — disable unless required
+
+traefik:
+  enabled: true
 ```
 
-### Component-Specific Configuration
+### Production Configuration
 
-Each sub-chart has its own `values.yaml` file in the `charts/` directory:
+1. Copy the template: `cp values-production.yaml.template values-production.yaml`
+2. Fill in all required values (see comments in the template)
+3. Do not commit `values-production.yaml` — it is in `.gitignore`
 
-- `charts/threesixty/values.yaml` - Admin, Discovery, RabbitMQ, and SCIM configuration
-- `charts/mongo/values.yaml` - MongoDB settings
-- `charts/elasticsearch/values.yaml` - Elasticsearch configuration
-- `charts/opensearch/values.yaml` - OpenSearch and Dashboards settings
-- `charts/hybridsearch/values.yaml` - Ollama and RAG agent configuration
+Required values include:
 
-### Security Best Practices
+- ECR image registry URL and tag (`threesixty.image.registry`, `.tag`)
+- Azure AD / Entra ID OAuth2 credentials (`threesixty.oauth2.*`)
+- RabbitMQ credentials — **must match** values in the setup script
+- MongoDB connection details
+- Domain name (`ingress.domain`)
 
-**⚠️ IMPORTANT**: Never commit sensitive credentials to version control. The chart now uses Kubernetes Secrets for all sensitive data.
+---
 
-#### Sensitive Configuration
+## Deployment Workflow
 
-All sensitive data is now stored in Kubernetes Secrets:
-
-- **MongoDB credentials** - Stored in `mongodb-secret`
-- **RabbitMQ credentials** - Stored in `admin-secret`
-- **OAuth2 credentials** - Stored in `discovery-secret`
-- **SCIM credentials** - Stored in `scim-secret`
-
-#### Automatic Connection String Generation
-
-The `MONGODB_URI` is now automatically generated from individual components:
-- Username and password from `mongodb.username` and `mongodb.password`
-- Host from the MongoDB service name
-- Database from `mongodb.database`
-
-#### Example Secure Values File
-
-Use `values-secure.yaml` as a template for production deployments:
-
-```bash
-# Copy the secure template
-cp charts/threesixty/values-secure.yaml charts/threesixty/my-production-values.yaml
-
-# Edit with your actual credentials
-vim charts/threesixty/my-production-values.yaml
-
-# Deploy with secure values
-helm install threesixty-stack . -n threesixty -f charts/threesixty/my-production-values.yaml
+```text
+1. Setup tools          →  make setup-kubectl
+2. Check cluster        →  kubectl config get-contexts
+                           kubectl config use-context <context-name>
+                           kubectl cluster-info   (or make aks-credentials)
+3. Create secrets       →  make secrets-kubectl  (or make secrets-aks)
+                           (also creates the namespace if it does not exist)
+4. Verify secrets       →  make verify-secrets
+5. Configure values     →  edit values-production.yaml
+6. Fetch dependencies   →  make deps
+7. Install              →  make install
+8. Verify               →  make status
 ```
 
-#### External Secrets Management
+### Cluster context commands
 
-For production environments, consider using external secrets management solutions:
+```powershell
+# Show the active cluster context
+kubectl config current-context
 
-- **HashiCorp Vault**
-- **AWS Secrets Manager**
-- **Azure Key Vault**
-- **External Secrets Operator**
+# List all contexts (active context marked with *)
+kubectl config get-contexts
 
-Example with External Secrets Operator:
-```yaml
-# Create external secret
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: threesixty-mongodb-secret
-spec:
-  secretStoreRef:
-    name: vault-backend
-    kind: SecretStore
-  target:
-    name: threesixty-stack-mongodb-secret
-  data:
-    - secretKey: MONGODB_PASSWORD
-      remoteRef:
-        key: threesixty/mongodb/password
+# Switch to a different cluster
+kubectl config use-context <context-name>
+
+# For AKS: fetch credentials and set context in one step
+make aks-credentials AKS_RG=<resource-group> AKS_CLUSTER=<cluster-name>
+```
+
+### Namespace
+
+The default namespace is `threesixty`. It is created automatically by the secrets setup scripts. If you use a different namespace, update it consistently in all three places:
+
+| Location | Setting |
+| -------- | ------- |
+| `kubectl-create-secrets.ps1` | `$NAMESPACE = "threesixty"` |
+| `aks-create-secrets.ps1` | `-Namespace` parameter (default `"threesixty"`) |
+| Makefile | `NAMESPACE ?= threesixty` (or `make install NAMESPACE=<ns>`) |
+
+`values-production.yaml` has no namespace setting — it is passed to Helm via `--namespace` from the Makefile.
+
+For upgrades (config changes, image updates):
+
+```text
+1. Edit values-production.yaml
+2. make upgrade
 ```
 
 ---
 
-## AWS ECR Authentication
+## Makefile Reference
 
-Before deploying, ensure you're authenticated with AWS ECR to pull the necessary Docker images:
+Run `make help` for the full list. Key targets:
 
-```bash
-aws configure
-# Enter your credentials and region when prompted:
-# AWS Access Key ID [None]: <your-access-key-id>
-# AWS Secret Access Key [None]: <your-secret-access-key>
-# Default region name [None]: ap-southeast-2
-# Default output format [None]: json
+| Target                    | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `make help`               | Show all targets with descriptions                               |
+| `make check-prerequisites`| Check kubectl, helm, aws, az, openssl, jq are installed          |
+| `make aks-credentials`    | Configure kubectl for AKS cluster                                |
+| `make secrets-kubectl`    | Run kubectl secrets setup script                                 |
+| `make secrets-aks`        | Run AKS invoke secrets setup script                              |
+| `make verify-secrets`     | Check all required secrets exist in the namespace                |
+| `make deps`               | Download Helm subchart dependencies                              |
+| `make install`            | Install the Helm release (first deployment)                      |
+| `make upgrade`            | Upgrade the Helm release (subsequent deployments)                |
+| `make status`             | Show release status and pod states                               |
+| `make pods`               | Watch pod status in real time                                    |
+| `make logs`               | Tail logs: `make logs DEPLOY=admin`                              |
+| `make events`             | Show recent Kubernetes events                                    |
+| `make rollback`           | Roll back to the previous release revision                       |
+| `make lint`               | Lint Helm templates                                              |
+| `make template`           | Render templates locally (dry run)                               |
+| `make validate`           | Lint + render (full dry-run validation)                          |
+| `make install-metallb`    | Install MetalLB + apply `metallb-config.yaml` (bare-metal only)  |
+| `make uninstall`          | Remove the Helm release (PVCs retained)                          |
+| `make purge`              | Remove release AND all PVCs (all data deleted)                   |
 
-aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com
-```
+### Custom release name or namespace
 
-Create a Kubernetes secret for ECR authentication:
-
-```bash
-kubectl -n <namespace> create secret docker-registry ecr-registry-secret \
-  --docker-server=782396859527.dkr.ecr.ap-southeast-2.amazonaws.com \
-  --docker-username=AWS \
-  --docker-password=$(aws ecr get-login-password --region ap-southeast-2)
-```
-
----
-
-## Deployment Checklist
-
-Before deploying, ensure you have completed the following steps:
-
-1. **✅ Kubernetes cluster is running and accessible**
-2. **✅ Traefik ingress controller is installed**
-3. **✅ TLS certificate secret is created** (see TLS Certificate Setup above)
-4. **✅ ECR authentication is configured** (see AWS ECR Authentication above)
-5. **✅ Namespace is created** (optional, will be created automatically)
-
-## Deployment
-
-### 1. Install Dependencies
-
-First, update and install the chart dependencies:
-
-```bash
-helm dependency update
-```
-
-### 2. Deploy the Stack
-
-Deploy all components:
-
-```bash
-helm install threesixty-stack . -n <namespace>
-```
-
-Or deploy to a new namespace:
-
-```bash
-kubectl create namespace threesixty
-helm install threesixty-stack . -n threesixty
-```
-
-### 3. Deploy with Custom Values
-
-To override default values:
-
-```bash
-helm install threesixty-stack . -n threesixty -f custom-values.yaml
-```
-
-### 4. Upgrade Existing Deployment
-
-```bash
-helm upgrade threesixty-stack . -n threesixty
+```powershell
+make install RELEASE=my-release NAMESPACE=my-ns VALUES_FILE=my-values.yaml
 ```
 
 ---
 
-## Service Endpoints
+## Resource Requirements
 
-After deployment, the following services will be available:
+Approximate resource requirements for a full production deployment:
 
-| Service | Internal Endpoint | External Access |
-|---------|------------------|-----------------|
-| Admin UI | `http://threesixty-stack-admin:8080/3sixty-admin` | `https://localhost/3sixty-admin` |
-| Discovery UI | `http://threesixty-stack-discovery:8080` | `https://localhost/3sixty-discovery` |
-| SCIM Server | `http://threesixty-stack-scim-server:8083` | `https://localhost/scim/v2` |
-| RabbitMQ Management | `http://threesixty-stack-rabbitmq:15672` | ClusterIP Only |
-| OpenSearch | `http://threesixty-stack-opensearch:9200` | ClusterIP Only |
-| OpenSearch Dashboards | `http://threesixty-stack-opensearch-dashboard:5601` | ClusterIP Only |
-| Elasticsearch | `http://threesixty-stack-elasticsearch:9200` | ClusterIP Only |
-| Ollama | `http://threesixty-stack-hybridsearch-ollama:11434` | ClusterIP Only |
-| RAG Agent | `http://threesixty-stack-hybridsearch-oirag:8080` | ClusterIP Only |
+| Component        | Memory request | Memory limit | CPU request | CPU limit |
+| ---------------- | -------------- | ------------ | ----------- | --------- |
+| Admin            | 512Mi          | 2Gi          | 500m        | 2000m     |
+| Discovery        | 512Mi          | 2Gi          | 500m        | 2000m     |
+| SCIM Server      | 256Mi          | 1Gi          | 250m        | 1000m     |
+| RabbitMQ         | 256Mi          | 512Mi        | 100m        | 500m      |
+| MongoDB          | 512Mi          | 2Gi          | 250m        | 1000m     |
+| OpenSearch       | 3Gi            | 5Gi          | 500m        | 2000m     |
+| OI-RAG           | 512Mi          | 2Gi          | 250m        | 1000m     |
+| Remote Agent     | 256Mi          | 1Gi          | 250m        | 1000m     |
+| Ollama (LLM)     | 4Gi            | 16Gi         | 1000m       | 4000m     |
 
----
+**Minimum cluster size**: 3 nodes × 8 vCPU / 32 GB RAM (without GPU).
+Ollama can run on CPU but is significantly slower than GPU.
 
-## Ingress Configuration
-
-The threesixty chart includes an Ingress resource configured for Traefik. The following services are accessible externally via HTTPS:
-
-### Currently Accessible Services
-
-- **Admin UI:** `https://localhost/3sixty-admin`
-- **Discovery UI:** `https://localhost/3sixty-discovery`
-- **SCIM Server:** `https://localhost/scim/v2`
-
-### TLS Certificate Setup
-
-Before deploying, you need to create a TLS certificate secret for secure HTTPS access. The ingress is configured to use Traefik as the ingress controller.
-
-#### Option 1: Self-Signed Certificate (Development)
-
-For development environments, create a self-signed certificate:
-
-```bash
-# Create certificates directory
-mkdir -p certs
-
-# Generate self-signed certificate
-openssl req -x509 -newkey rsa:2048 -days 365 \
-  -nodes \
-  -keyout certs/tls.key \
-  -out certs/tls.crt \
-  -subj "/CN=localhost"
-
-# Create Kubernetes TLS secret
-kubectl create secret tls traefik-tls --cert=certs/tls.crt --key=certs/tls.key -n <namespace>
-```
-
-#### Option 2: Custom Certificate
-
-For custom certificates:
-
-```bash
-# Create Kubernetes TLS secret with your certificate
-kubectl create secret tls traefik-tls --cert=path/to/your/cert.crt --key=path/to/your/cert.key -n <namespace>
-```
-
-### Current TLS Configuration
-
-The ingress is configured with TLS for secure access:
-
-```yaml
-ingress:
-  ingressClassName: traefik
-  tls:
-    - secretName: traefik-tls
-      hosts:
-        - localhost
-```
-
-### Custom Domain Setup
-
-To use a custom domain instead of localhost, update the ingress configuration in `charts/threesixty/values.yaml`:
-
-```yaml
-ingress:
-  ingressClassName: traefik
-  tls:
-    - secretName: traefik-tls
-      hosts:
-        - your-domain.com
-```
+**OpenSearch note**: OpenSearch requires `vm.max_map_count ≥ 262144` on each cluster node.
+Set via a privileged init DaemonSet or node configuration:
+`sysctl -w vm.max_map_count=262144`
 
 ---
 
-## Environment Variables
+## Persistent Data
 
-### Non-Sensitive Configuration (ConfigMaps)
+PVCs are annotated with `helm.sh/resource-policy: keep` — they survive `helm uninstall`.
+This protects MongoDB, OpenSearch, Elasticsearch, and Ollama model data.
 
-These environment variables are stored in ConfigMaps and are safe to commit to version control:
-
-```yaml
-env:
-  admin:
-    APP_URI: "/3sixty-admin"
-    RABBITMQ_HOST: "threesixty-stack-rabbitmq"
-    RABBITMQ_QUEUE: "scim-queue"
-    GRPC_SERVER_START: "true"
-    GRPC_SERVER_SSL: "false"
-    GLOBAL_ORG: "objective"
-
-  discovery:
-    APP_URI: "http://threesixty-stack-admin:8080/3sixty-admin"
-    OAUTH2_ENABLED: "true"
-```
-
-### Sensitive Configuration (Secrets)
-
-These environment variables are automatically generated and stored in Kubernetes Secrets:
-
-#### MongoDB Configuration
-```yaml
-mongodb:
-  username: "dbuser"
-  password: "your-secure-password"  # Stored in mongodb-secret
-  database: "dbtest"
-  scimDatabase: "scim-database"
-```
-
-**Automatically generates:**
-- `MONGODB_URI`: `mongodb://username:password@service:27017/database`
-- `MONGODB_USERNAME`, `MONGODB_PASSWORD`, `MONGODB_DATABASE`
-
-#### OAuth2 Configuration
-```yaml
-oauth2:
-  clientId: "your-azure-client-id"
-  tenantId: "your-azure-tenant-id"
-  clientSecret: "your-azure-client-secret"
-```
-
-**Automatically generates:**
-- `CLIENT_ID`, `TENANT_ID`, `CLIENT_SECRET` (stored in discovery-secret)
-
-#### RabbitMQ Configuration
-```yaml
-rabbitmq:
-  username: "rabbitmq-user"
-  password: "your-secure-password"
-```
-
-**Automatically generates:**
-- `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` (stored in admin-secret)
-
-### RAG Agent Configuration
-
-The hybridsearch component includes Ollama and the RAG agent:
-
-```yaml
-oirag:
-  env:
-    OPENAI_API_BASE: "http://threesixty-stack-hybridsearch-ollama:11434/v1"
-    OPENSEARCH_URL: "http://threesixty-stack-opensearch:9200"
-    EMBEDDING_MODEL: "mxbai-embed-large"
-    QA_MODEL: "mxbai-embed-large"
-```
+To fully wipe all data: `make purge` (irreversible).
 
 ---
 
-## Persistence
+## Security
 
-### MongoDB
+All pods run as non-root with `allowPrivilegeEscalation: false` and `capabilities.drop: ALL`.
 
-MongoDB data is persisted using PersistentVolumeClaims. Configure storage class and size in `charts/mongo/values.yaml`.
-
-### OpenSearch
-
-OpenSearch data persistence is configured in `charts/opensearch/values.yaml`.
-
-### Ollama Models
-
-Ollama models are persisted using a PVC with 5Gi storage by default. Configure in `charts/hybridsearch/values.yaml`.
+| Component    | UID  | Notes                                                                                              |
+| ------------ | ---- | -------------------------------------------------------------------------------------------------- |
+| Admin        | 1000 | Runs as container default user (root required for startup chmod/gosu — see security backlog H-02a) |
+| Discovery    | 1000 | Runs as container default user (root required for startup chmod/gosu — see security backlog H-02a) |
+| SCIM         | 1000 | Runs as container default user (root required for startup chmod/gosu — see security backlog H-02a) |
+| MongoDB      | 999  | Official MongoDB image default                                                                     |
+| RabbitMQ     | 999  | Official RabbitMQ image default                                                                    |
+| OpenSearch   | 1000 | Official OpenSearch image default                                                                  |
+| OI-RAG       | 1000 | OI-RAG service user                                                                                |
+| Remote Agent | 1000 | Remote Agent service user                                                                          |
+| Ollama       | 0    | Ollama official image requires root                                                                |
 
 ---
 
-## Monitoring and Logging
+## Versioning and Upgrades
 
-### Service Health Checks
-
-All services include health check endpoints and readiness/liveness probes.
-
-### Logs
-
-Access logs for individual pods:
+Each subchart has an independent version in its `Chart.yaml`. The parent chart version in `Chart.yaml` should be incremented when templates or values change.
 
 ```bash
-kubectl logs -f deployment/threesixty-stack-admin -n threesixty
-kubectl logs -f deployment/threesixty-stack-discovery -n threesixty
-kubectl logs -f deployment/threesixty-stack-hybridsearch-oirag -n threesixty
+# Check current Helm release history
+make history
+
+# Roll back to a specific revision
+helm rollback threesixty-stack <revision> --namespace threesixty
 ```
 
-### OpenSearch Dashboards
-
-Access OpenSearch Dashboards for search analytics and monitoring:
-
-```bash
-kubectl port-forward svc/threesixty-stack-opensearch-dashboard 5601:5601 -n threesixty
-```
-
-Then visit `http://localhost:5601`
+See `Chart.yaml` for the full versioning guide.
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+```powershell
+# Check pod status and events
+make status
+make events
 
-1. **Image Pull Errors**
-   - Ensure ECR authentication is properly configured
-   - Verify the `ecr-registry-secret` exists in your namespace
+# Inspect logs for a failing pod
+make logs DEPLOY=admin
 
-2. **Service Communication Issues**
-   - Check that all services are running: `kubectl get pods -n threesixty`
-   - Verify network policies allow inter-service communication
+# Decode a secret value
+kubectl get secret threesixty-stack-rabbitmq-secret -n threesixty \
+    -o jsonpath='{.data.RABBITMQ_DEFAULT_USER}' | base64 -d
 
-3. **Database Connection Issues**
-   - Ensure MongoDB is running and accessible
-   - Check MongoDB credentials in environment variables
+# Check PVC binding
+kubectl get pvc -n threesixty
 
-4. **Ingress Not Working**
-   - Verify your ingress controller is installed and running
-   - Check ingress configuration and TLS certificates
-   - Ensure the TLS secret exists: `kubectl get secret traefik-tls -n <namespace>`
-   - Check ingress status: `kubectl describe ingress threesixty-stack -n <namespace>`
-
-### Debug Commands
-
-```bash
-# Check pod status
-kubectl get pods -n threesixty
-
-# Describe pod for detailed information
-kubectl describe pod <pod-name> -n threesixty
-
-# Check service endpoints
-kubectl get endpoints -n threesixty
-
-# Check ingress status
-kubectl get ingress -n threesixty
+# Force-restart a deployment
+kubectl rollout restart deployment/threesixty-stack-threesixty-admin -n threesixty
 ```
 
----
+Common issues:
 
-## Uninstallation
-
-To remove the entire stack:
-
-```bash
-helm uninstall threesixty-stack -n threesixty
-```
-
-**Note**: This will remove all deployments, services, and PVCs. Data in persistent volumes will be lost unless you manually preserve it.
-
----
-
-## Security Considerations
-
-### Production Deployment
-
-For production environments, consider:
-
-1. **TLS Certificates**: Use proper TLS certificates for all external endpoints
-2. **Network Policies**: Implement network policies to restrict inter-service communication
-3. **Secrets Management**: Use Kubernetes secrets or external secret management solutions
-4. **RBAC**: Configure appropriate RBAC policies
-5. **Resource Limits**: Set appropriate resource requests and limits for all pods
-
-### SCIM Integration
-
-For SCIM user provisioning, ensure your SCIM endpoint is accessible from Microsoft Entra ID (Azure AD) and configure the appropriate callback URLs.
-
----
-
-## Support
-
-For issues related to:
-- **Helm Charts**: Check the individual chart README files in the `charts/` directory
-- **3Sixty Services**: Refer to the service-specific documentation
-- **Kubernetes**: Consult Kubernetes documentation and your cluster provider's support
+- **ImagePullBackOff**: ECR token expired (valid 12h) — re-run secrets script
+- **OpenSearch CrashLoopBackOff**: `vm.max_map_count` too low on node
+- **Ollama slow start**: Normal — model pull takes up to 10 minutes on cold start
+- **Admin/SCIM can't connect to RabbitMQ**: RabbitMQ password mismatch between secret and `values-production.yaml`
+- **Remote Agent CrashLoopBackOff**: Requires a real REMOTE_AGENT_TOKEN registered in the admin UI. Set `hybridsearch.remoteagent.enabled: false` until token is available.

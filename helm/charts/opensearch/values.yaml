@@ -3,11 +3,14 @@ enabled: true
 image:
   opensearch:
     repository: opensearchproject/opensearch
-    tag: "2.4.1"
+    # 2.17.1 is the current LTS. Minimum required version is 2.12 for
+    # OPENSEARCH_INITIAL_ADMIN_PASSWORD to be enforced at startup.
+    # Versions below 2.12 ignore this env var and use the insecure demo password.
+    tag: "2.17.1"
     pullPolicy: IfNotPresent
   dashboards:
     repository: opensearchproject/opensearch-dashboards
-    tag: "2.4.1"
+    tag: "2.17.1"
     pullPolicy: IfNotPresent
 
 service:
@@ -33,3 +36,49 @@ cluster:
     - "-Ebootstrap.memory_lock=true"
 
 javaOpts: "-Xms2g -Xmx2g"
+
+# OpenSearch admin credentials.
+# OPENSEARCH_INITIAL_ADMIN_PASSWORD: set via external secret {release}-opensearch-admin-secret
+# created by kubectl-create-secrets.ps1 or aks-create-secrets.ps1.
+# This password must match OPENSEARCH_PASSWORD in the hybridsearch oirag secret.
+# Username 'admin' is the default OpenSearch superuser — use this when
+# configuring index jobs, data sources, and dashboards in the application.
+
+# OpenSearch official image runs as UID/GID 1000 (opensearch user/group).
+# IMPORTANT: The host node must have vm.max_map_count >= 262144 for OpenSearch
+# to start (bootstrap.memory_lock is enabled). Set this via a DaemonSet or
+# node configuration: sysctl -w vm.max_map_count=262144
+# Service account should have no cluster-level permissions.
+# fsGroup 1000 ensures the opensearch user can write to the data PVC.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# Dashboard runs as UID 1000 (opensearch-dashboards user)
+dashboardSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  opensearch:
+    requests:
+      memory: "3Gi"
+      cpu: "500m"
+    limits:
+      memory: "5Gi"
+      cpu: "2000m"
+  dashboard:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"

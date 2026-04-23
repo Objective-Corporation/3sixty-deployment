@@ -1,0 +1,81 @@
+# ====================================================================
+# MetalLB Configuration for Bare-Metal Kubernetes Load Balancing
+# ====================================================================
+#
+# WHAT IS MetalLB?
+# MetalLB is a load-balancer implementation for bare-metal Kubernetes clusters.
+# It provides network load balancing for services of type LoadBalancer.
+#
+# WHEN TO USE THIS FILE:
+# ✅ Use MetalLB on:
+#   - Bare-metal Kubernetes clusters (on-premises)
+#   - Self-hosted clusters (kubeadm, k3s, microk8s)
+#   - Local development clusters (kind, minikube)
+#   - Private data center deployments
+#
+# ❌ DO NOT use MetalLB on:
+#   - Cloud providers (AWS EKS, Azure AKS, GCP GKE) - they provide native LoadBalancer
+#   - Managed Kubernetes services - they have built-in load balancing
+#
+# CURRENT STATUS IN THIS CHART:
+# ⚠️  This chart does NOT currently use LoadBalancer services (all services are ClusterIP).
+#     This file is included for future use or custom deployments that expose services externally.
+#
+# HOW TO DETERMINE YOUR IP ADDRESS RANGE:
+#
+# Option 1: Private Network (Recommended for most on-premises deployments)
+#   - Use IPs from your existing network that are NOT assigned by DHCP
+#   - Reserve a range in your router/DHCP server for MetalLB
+#   - Common private ranges (RFC 1918):
+#     • Class A: 10.0.0.0/8        (e.g., 10.0.100.10-10.0.100.20)
+#     • Class B: 172.16.0.0/12     (e.g., 172.16.0.100-172.16.0.110)
+#     • Class C: 192.168.0.0/16    (e.g., 192.168.1.100-192.168.1.110)
+#
+# Option 2: Public IPs (Only if you have allocated public IPs)
+#   - Use actual public IPs assigned to your organization
+#   - NOT recommended for most deployments due to security and cost
+#
+# EXAMPLE CONFIGURATION STEPS:
+# 1. Check your network: `ip addr` or `ipconfig`
+# 2. If your nodes are on 192.168.1.0/24, reserve 192.168.1.100-110 for LoadBalancers
+# 3. Update the addresses range below
+# 4. Install MetalLB: 
+#    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
+# 5. Apply this config: `kubectl apply -f metallb-config.yaml`
+#
+# ====================================================================
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    # CONFIGURE YOUR IP RANGE HERE
+    # Replace with IPs from your network that are:
+    # - On the same subnet as your Kubernetes nodes
+    # - NOT used by DHCP or other devices
+    # - Accessible from clients that need to reach services
+    #
+    # Example for a typical home/office network (192.168.1.x):
+    - 192.168.1.100-192.168.1.110
+    #
+    # Original configuration (adjust to match your environment):
+    # - 10.9.9.220-10.9.9.230
+    #
+    # For multiple ranges, add additional lines:
+    # - 192.168.1.100-192.168.1.110
+    # - 192.168.2.50-192.168.2.60
+
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: l2  
+  namespace: metallb-system
+spec:
+  # Advertise the IP pool via Layer 2 (ARP/NDP)
+  # This makes the LoadBalancer IPs accessible on your local network
+  ipAddressPools:
+    - default-pool

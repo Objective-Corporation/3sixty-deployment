@@ -1,0 +1,13 @@
+{{- if .Values.scim.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "threesixty.fullname" . }}-scim-server
+spec:
+  type: {{ .Values.scim.service.type }}
+  selector:
+    app: {{ include "threesixty.fullname" . }}-scim-server
+  ports:
+    - port: {{ .Values.scim.service.port }}
+      targetPort: {{ .Values.scim.config.serverPort }}
+{{- end }}

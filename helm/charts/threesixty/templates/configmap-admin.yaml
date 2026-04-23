@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "threesixty.fullname" . }}-admin-config
+  labels:
+    app.kubernetes.io/name: {{ include "threesixty.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  # APP_URI is intentionally NOT set here. The deployment template sets it
+  # conditionally based on the image tag (afs vs standard). Setting it in both
+  # places would cause the ConfigMap value to be silently ignored by Kubernetes
+  # (inline env takes precedence over envFrom). See deployment-admin.yaml.
+  {{- if .Values.scim.enabled }}
+  RABBITMQ_HOST: {{ .Values.env.admin.RABBITMQ_HOST | quote }}
+  {{- else }}
+  RABBITMQ_HOST: ""
+  {{- end }}
+  RABBITMQ_QUEUE: {{ .Values.env.admin.RABBITMQ_QUEUE | quote }}
+  {{- if .Values.scim.enabled }}
+  SCIM_TOKEN_URL: "http://{{ include "threesixty.fullname" . }}-scim-server:{{ .Values.scim.config.serverPort }}/scim/v2/token"
+  {{- end }}
+  GRPC_SERVER_START: {{ .Values.env.admin.GRPC_SERVER_START | quote }}
+  GRPC_SERVER_SSL: {{ .Values.env.admin.GRPC_SERVER_SSL | quote }}
+  GLOBAL_ORG: {{ .Values.env.admin.GLOBAL_ORG | quote }}
+  MODULE_COPILOT_AGENT_ENABLED: {{ .Values.env.admin.MODULE_COPILOT_AGENT_ENABLED | quote }}

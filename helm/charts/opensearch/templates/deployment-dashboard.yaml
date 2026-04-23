@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensearch.fullname" . }}-dashboards
+  labels:
+    {{- include "opensearch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search-dashboard
+    app: {{ include "opensearch.fullname" . }}-dashboards
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "opensearch.fullname" . }}-dashboards
+  template:
+    metadata:
+      labels:
+        app: {{ include "opensearch.fullname" . }}-dashboards
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: dashboards
+          image: "{{ .Values.image.dashboards.repository }}:{{ .Values.image.dashboards.tag }}"
+          imagePullPolicy: {{ .Values.image.dashboards.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.dashboardSecurityContext | nindent 12 }}
+          env:
+            - name: OPENSEARCH_HOSTS
+              value: '["https://{{ include "opensearch.fullname" . }}:{{ .Values.service.httpPort }}"]'
+            # Credentials required to connect to a security-enabled OpenSearch cluster.
+            # Username 'admin' is the built-in OpenSearch superuser.
+            - name: OPENSEARCH_USERNAME
+              value: "admin"
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensearch.fullname" . }}-admin-secret
+                  key: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+          resources:
+            {{- toYaml .Values.resources.dashboard | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.service.dashboardPort }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.service.dashboardPort }}
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.service.dashboardPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.dashboardPort }}

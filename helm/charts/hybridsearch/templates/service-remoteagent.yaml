@@ -1,0 +1,14 @@
+{{- if .Values.remoteagent.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-remoteagent
+spec:
+  type: {{ .Values.remoteagent.service.type }}
+  selector:
+    app: {{ include "hybridsearch.fullname" . }}-remoteagent
+  ports:
+    - name: http
+      port: {{ .Values.remoteagent.service.port }}
+      targetPort: {{ .Values.remoteagent.service.port }}
+{{- end }}

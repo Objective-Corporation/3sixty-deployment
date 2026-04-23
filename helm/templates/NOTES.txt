@@ -1,0 +1,80 @@
+3Sixty Stack has been deployed!
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }}
+
+=============================================================================
+VERIFY DEPLOYMENT
+=============================================================================
+
+  kubectl get pods -n {{ .Release.Namespace }}
+
+All pods should reach Running/Ready state. Allow up to 10 minutes for:
+  - OpenSearch: JVM heap initialisation (~60s)
+  - Ollama: LLM model download on first start (~5-10 min, cached after)
+
+=============================================================================
+PREREQUISITES — VERIFY THESE BEFORE FILING BUGS
+=============================================================================
+
+1. REQUIRED SECRETS
+   All 7 secrets must exist before pods can start:
+
+   kubectl get secrets -n {{ .Release.Namespace }}
+
+   Expected secrets:
+     ecr-registry-secret
+     traefik-tls
+     {{ .Release.Name }}-rabbitmq-secret
+     {{ .Release.Name }}-mongo-init-secret
+     {{ .Release.Name }}-opensearch-admin-secret
+     {{ .Release.Name }}-hybridsearch-oirag-secret
+     {{ .Release.Name }}-hybridsearch-remoteagent-secret
+
+   Missing secrets? Re-run: kubectl-create-secrets.ps1 or aks-create-secrets.ps1
+
+2. OPENSEARCH: vm.max_map_count REQUIREMENT
+   OpenSearch requires vm.max_map_count >= 262144 on every cluster node.
+   Without this, OpenSearch will fail to start with an error about bootstrap checks.
+
+   Check: kubectl exec -n {{ .Release.Namespace }} <opensearch-pod> -- sysctl vm.max_map_count
+   Fix:   sysctl -w vm.max_map_count=262144  (run on the node, or via DaemonSet)
+
+3. OPENSEARCH ADMIN PASSWORD (version 2.4.1 note)
+   The OPENSEARCH_INITIAL_ADMIN_PASSWORD env var is IGNORED by OpenSearch 2.4.1.
+   The default demo password is in effect until you either:
+   a) Upgrade OpenSearch to >= 2.12 (recommended), OR
+   b) Run securityadmin.sh inside the pod with a custom internal_users.yml
+
+   The OpenSearch admin username is always: admin
+   The password you intend to use is in the secret:
+     kubectl get secret {{ .Release.Name }}-opensearch-admin-secret \
+       -n {{ .Release.Namespace }} \
+       -o jsonpath='{.data.OPENSEARCH_INITIAL_ADMIN_PASSWORD}' | base64 -d
+
+4. ECR TOKEN EXPIRY
+   AWS ECR tokens are valid for 12 hours. If pods show ImagePullBackOff,
+   re-run the secrets setup script to refresh the ECR credentials.
+
+=============================================================================
+ACCESS
+=============================================================================
+
+The application is accessible at: https://{{ index (index .Values "ingress" | default dict) "domain" | default "<your-domain>" }}
+
+  3Sixty Admin:     https://<domain>/3sixty-admin
+  3Sixty Discovery: https://<domain>/3sixty-discovery
+  OpenSearch Dashboards: accessible via kubectl port-forward (internal only)
+
+=============================================================================
+OPERATIONS
+=============================================================================
+
+  Tail logs:   kubectl logs -n {{ .Release.Namespace }} -l app=<pod-name> -f
+  Events:      kubectl get events -n {{ .Release.Namespace }} --sort-by=.lastTimestamp
+  Status:      helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  Upgrade:     helm upgrade {{ .Release.Name }} . -n {{ .Release.Namespace }} -f values-production.yaml
+  Rollback:    helm rollback {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+  See QUICK-START.md and SECRETS-MANAGEMENT.md for full documentation.

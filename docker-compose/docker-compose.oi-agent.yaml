@@ -1,11 +1,37 @@
+# =============================================================================
+# OI Remote Agent for 3Sixty
+# =============================================================================
+# Configure after creating remote agent in Admin UI
+# Update REMOTE_AGENT_NAME and REMOTE_AGENT_TOKEN in .env file
+# =============================================================================
+
 services:
   remote-agent-oi-rag:
     image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveremoteagentoirag:5.0.2-RC1
     container_name: remote-agent-oi-rag
     env_file:
-      - ./.env.oi-agent
+      - .env
     networks:
       - threesixty
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
 
 networks:
   threesixty:
