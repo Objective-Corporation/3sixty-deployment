@@ -17,4 +17,4 @@ name: threesixty
 description: Core 3Sixty services subchart (Admin, Discovery, SCIM) for Kubernetes deployment
 type: application
 version: 1.0.0  # Subchart version - update when modifying templates/values
-appVersion: "5.2.0"  # 3Sixty application version - update when changing image tags
+appVersion: "5.2.2"  # 3Sixty application version - update when changing image tags

@@ -3,7 +3,7 @@ enabled: true
 
 # oi-rag settings
 oirag:
-  enabled: true
+  enabled: false
   image:
     repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveoirag
     tag: 5.0.1-RC3
@@ -17,7 +17,7 @@ oirag:
     # in configmap-oirag.yaml — do not set them here.
     OPENAI_API_KEY:            "no-key"
     EMBEDDING_MODEL:           "mxbai-embed-large"
-    QA_MODEL: "mxbai-embed-large"
+    QA_MODEL:                  "mxbai-embed-large"
     EXTRACT_SEARCH_QUERY_TEMPERATURE: "0.75"
     QUESTION_AND_ANSWER_TEMPERATURE:  "0.10"
     OPENSEARCH_USER:           "admin"
@@ -55,15 +55,21 @@ remoteagent:
   enabled: true
   image:
     repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveremoteagentoirag 
-    tag: 5.0.2-RC1
+    tag: 1.8.0
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    port: 50052
+    port: 8083          # remote agent HTTP listener (outbound gRPC to admin is on 50052)
   env:
     # REMOTE_AGENT_TOKEN: managed via hybridsearch-remoteagent-secret
-    REMOTE_AGENT_NAME:      ragtest
-    GRPC_PORT:              50052
+    REMOTE_AGENT_TOKEN:     360_objective_1778461791197           # ensure matches configured token in admin interface
+    REMOTE_AGENT_NAME:      remote_agent_threesixty_rag               # ensure matches configured name in admin interface
+    SERVER_PORT:            8083
+
+    # REMOTE_AGENT_GRPC_SERVER_HOST: threesixty-admin
+    REMOTE_AGENT_GRPC_SERVER_HOST: threesixty-stack-admin         # change to match the pod for three3Sixty
+    REMOTE_AGENT_GRPC_SERVER_PORT: 50052
+    GRPC_PORT:              50052   # outbound — port on threesixty-admin the agent connects to
     # GRPC_HOST and REMOTE_SERVER_URL are computed from the Helm release name
     # in configmap-remoteagent.yaml — do not set them here.
     # SSL_CA_PASSWORD: managed via hybridsearch-remoteagent-secret
@@ -90,6 +96,50 @@ remoteagent:
     # emptyDir for temporary logs
     emptyDir: {}
 
+# 3Sixty RAG service settings
+threesixtyrag:
+  enabled: true
+  image:
+    repository: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/obj3sixtyrag
+    tag: 1.2.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8888
+  env:
+    CORS_ALLOW_ORIGINS:        "*"
+    # OPENAI_API_BASE and OPENSEARCH_URL are computed from the Helm release name
+    # in configmap-threesixtyrag.yaml — do not set them here.
+    EMBEDDING_MODEL:          "mxbai-embed-large"
+    QUESTION_AND_ANSWER_MODEL: "mxbai-embed-large"
+    REQUESTS_CA_BUNDLE:       /app/certs/root-ca.pem
+    SSL_CERT_FILE:       /etc/ssl/certs/ca-certificates.crt
+    OPENAI_API_KEY:      "no-key"
+    # OPENSEARCH_PASSWORD: managed via hybridsearch-3sixtyrag-secret
+    # BEARER_TOKEN: managed via hybridsearch-3sixtyrag-secret
+  # Optional: set to a ConfigMap name whose data contains a root-ca.pem key.
+  # Leave empty to skip the CA bundle volume mount.
+  caBundle:
+    configMapName: ""
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  logs:
+    emptyDir: {}
+
 # Ollama LLM Service
 ollama:
   image:
@@ -102,7 +152,7 @@ ollama:
   model: "mxbai-embed-large"  # LLM model to pull and serve (matches EMBEDDING_MODEL above)
   persistence:
     enabled: true
-    storageClass: ""  # Use default storage class
+    storageClass: "standard"  # Docker Desktop default; set to "" to use cluster default on other providers
     size: 10Gi
   # IMPORTANT: The official ollama/ollama image writes model files to /root/.ollama
   # and runs as root (UID 0) by default. Running as non-root requires a custom image

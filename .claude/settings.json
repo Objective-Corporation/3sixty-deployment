@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(gh pr create --title 'Update 3Sixty deployment to 5.2.2 with hybridsearch RAG enhancements' --body ' *)"
+    ]
+  }
+}

@@ -15,7 +15,7 @@
 
 apiVersion: v2
 name: hybridsearch
-description: Hybridsearch subchart with Ollama LLM, OI-RAG agent, and Remote Agent
+description: Hybridsearch subchart with Ollama LLM, OI-RAG agent, 3Sixty RAG, and Remote Agent
 type: application
 version: 1.0.0  # Subchart version - update when modifying templates/values
 appVersion: "0.7.0_5.0.1-RC3"  # Compound version: Ollama_OI-RAG - update when changing image tags

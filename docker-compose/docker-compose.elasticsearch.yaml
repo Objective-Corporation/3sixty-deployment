@@ -1,16 +1,20 @@
 # =============================================================================
-# Elasticsearch + Kibana Stack
+# Elasticsearch + Kibana Stack (Legacy — prefer OpenSearch)
 # =============================================================================
-# Optional Elasticsearch monitoring with Kibana dashboard
+# Optional Elasticsearch stack retained for backward-compatibility only.
+# Prefer OpenSearch for new deployments (AI/embedding/vector DB + licensing).
 #
 # Usage:
 #   docker compose -f docker-compose.elasticsearch.yaml up -d
 #   OR
 #   make elasticsearch-start
 #
+# Port mapping: Elasticsearch is remapped to host ports 19200/19300 to avoid
+# clashing with OpenSearch which owns 9200/9300 in the core stack.
+#
 # Access:
-#   Kibana: https://localhost/kibana
-#   Elasticsearch: http://localhost:9200
+#   Kibana:         http://localhost:5601
+#   Elasticsearch:  http://localhost:19200
 # =============================================================================
 
 services:
@@ -63,8 +67,8 @@ services:
       # - xpack.security.enabled=true
       # - ELASTIC_PASSWORD=changeme
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "19200:9200"   # remapped: OpenSearch owns 9200 in the core stack
+      - "19300:9300"   # remapped: OpenSearch owns 9300 in the core stack
     volumes:
       - es_data:/usr/share/elasticsearch/data
     restart: unless-stopped

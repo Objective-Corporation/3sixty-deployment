@@ -46,7 +46,7 @@ services:
         max-file: "3"
 
   threesixty-admin:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixty:5.2.0
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixty:5.2.1
     container_name: threesixty-admin
     env_file:
       - .env
@@ -80,7 +80,7 @@ services:
     #  - ./my-data:/usr/local/tomcat/localMount:rw
 
   threesixty-discovery:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixtydiscovery:5.2.0
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixtydiscovery:5.2.1
     container_name: threesixty-discovery
     env_file:
       - .env
@@ -181,7 +181,7 @@ services:
         max-file: "3"
   
   scim-server:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver:1.0.5
+    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver:2.0.0
     container_name: scim-server
     env_file:
       - .env

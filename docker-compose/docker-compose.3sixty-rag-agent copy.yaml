@@ -1,16 +1,18 @@
 # =============================================================================
-# OI Remote Agent for 3Sixty
+# 3Sixty Remote Agent for 3Sixty
 # =============================================================================
 # Configure after creating remote agent in Admin UI
 # Update REMOTE_AGENT_NAME and REMOTE_AGENT_TOKEN in .env file
 # =============================================================================
 
 services:
-  remote-agent-oi-rag:
+  remote-agent-3sixty-rag:
     image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveremoteagentoirag:1.8.0
-    container_name: remote-agent-oi-rag
+    container_name: remote-agent-3sixty-rag
     env_file:
-      - .env
+      - ./.env.remote-agent-3sixty-rag
+    ports:
+        - "8083:8083"  
     networks:
       - threesixty
     healthcheck:

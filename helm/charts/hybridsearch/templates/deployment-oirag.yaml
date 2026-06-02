@@ -34,22 +34,19 @@ spec:
           resources:
             {{- toYaml .Values.oirag.resources | nindent 12 }}
           readinessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: {{ .Values.oirag.service.port }}
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: {{ .Values.oirag.service.port }}
             initialDelaySeconds: 30
             periodSeconds: 30
             failureThreshold: 3
           startupProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: {{ .Values.oirag.service.port }}
             initialDelaySeconds: 10
             periodSeconds: 5

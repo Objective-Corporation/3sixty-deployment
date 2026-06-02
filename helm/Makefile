@@ -33,11 +33,11 @@
 ifeq ($(OS),Windows_NT)
     BASH_PATH ?= C:/Program Files/Git/usr/bin/bash.exe
     SHELL     := $(BASH_PATH)
+    SLEEP10   := "$(BASH_PATH)" -c "sleep 10"
 else
-    SHELL := /bin/bash
+    SHELL   := /bin/bash
+    SLEEP10 := sleep 10
 endif
-
-SLEEP10 := sleep 10
 
 # --- Configuration ------------------------------------------------------------
 RELEASE       ?= threesixty-stack
@@ -138,7 +138,7 @@ secrets-kubectl: ## Create Kubernetes secrets via kubectl (edit kubectl-create-s
 		printf "$(YELLOW)        Edit kubectl-create-secrets.sh and set your credentials, then re-run.$(RESET)\n"; \
 		exit 1; \
 	fi
-	bash ./kubectl-create-secrets.sh
+	"$(BASH_PATH)" ./kubectl-create-secrets.sh
 	@printf "$(GREEN)[OK] Secrets created.$(RESET)\n"
 
 secrets-aks: ## Create Kubernetes secrets via AKS invoke (requires AKS_RG and AKS_CLUSTER)
@@ -183,6 +183,7 @@ verify-secrets: ## List all secrets in the namespace and verify required secrets
 		$(RELEASE)-mongo-init-secret \
 		$(RELEASE)-opensearch-admin-secret \
 		$(RELEASE)-hybridsearch-oirag-secret \
+		$(RELEASE)-hybridsearch-3sixtyrag-secret \
 		$(RELEASE)-hybridsearch-remoteagent-secret; do \
 		if kubectl get secret $$secret -n $(NAMESPACE) &>/dev/null; then \
 			printf "  $(GREEN)[OK]$(RESET) $$secret\n"; \
@@ -224,6 +225,7 @@ upgrade: ## Upgrade the Helm release (also installs if not present)
 		--values $(VALUES_FILE) \
 		--timeout 10m \
 		--wait \
+		--cleanup-on-fail \
 		--force-conflicts
 	@printf "$(GREEN)[OK] Release '$(RELEASE)' upgraded.$(RESET)\n"
 	@$(MAKE) status

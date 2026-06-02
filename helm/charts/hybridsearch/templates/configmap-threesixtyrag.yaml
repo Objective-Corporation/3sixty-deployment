@@ -1,15 +1,16 @@
+{{- if .Values.threesixtyrag.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "hybridsearch.fullname" . }}-oirag-config
+  name: {{ include "hybridsearch.fullname" . }}-3sixtyrag-config
   labels:
     app.kubernetes.io/name: {{ include "hybridsearch.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 data:
-  {{- range $key, $value := .Values.oirag.env }}
+  {{- range $key, $value := .Values.threesixtyrag.env }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
-  # Service URLs are derived from the release name so they work regardless of
-  # what name is used at helm install time (not hardcoded to threesixty-stack-*)
+  # OpenSearch URL derived from release name so it works for any helm install name
   OPENAI_API_BASE: "http://{{ include "hybridsearch.fullname" . }}-ollama:{{ .Values.ollama.service.port }}/v1"
   OPENSEARCH_URL: "http://{{ .Release.Name }}-opensearch:9200"
+{{- end }}

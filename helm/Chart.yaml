@@ -50,7 +50,7 @@ name: threesixty-stack
 description: Production-ready Helm chart for deploying the complete 3Sixty application stack to Kubernetes
 type: application
 version: 1.5.0  # Chart version - update when modifying chart structure/templates
-appVersion: "5.2.0"  # 3Sixty application version being deployed
+appVersion: "5.2.2"  # 3Sixty application version being deployed
 
 # Subchart Dependencies
 # Update dependency versions to match subchart Chart.yaml versions

@@ -46,7 +46,7 @@ image:
   registry: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com
   adminRepo: objective3sixty
   discoveryRepo: objective3sixtydiscovery
-  tag: 5.2.0            # Change to match version of 3Sixty you want to deploy
+  tag: 5.2.2            # Change to match version of 3Sixty you want to deploy
   pullPolicy: IfNotPresent
 
 # Service configuration

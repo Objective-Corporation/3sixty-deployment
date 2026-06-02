@@ -21,7 +21,7 @@ service:
 
 persistence:
   enabled: true
-  storageClass: local-path
+  storageClass: hostpath
   size: 10Gi
 
 cluster:
@@ -71,7 +71,7 @@ resources:
   opensearch:
     requests:
       memory: "3Gi"
-      cpu: "500m"
+      cpu: "200m"
     limits:
       memory: "5Gi"
       cpu: "2000m"

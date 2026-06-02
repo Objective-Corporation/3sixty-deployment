@@ -12,8 +12,40 @@
 # =============================================================================
 
 services:
+  # Network Share for BFS Jobs/Exports
+  #
+  # PLATFORM NOTES — dperson/samba:
+  #   IMAGE:   amd64 only (no arm64 manifest). On Apple Silicon Mac either:
+  #            a) Set DOCKER_DEFAULT_PLATFORM=linux/amd64 in ~/.zshrc (runs via Rosetta 2), or
+  #            b) Comment this entire service out if you do not need the BFS/NWD network share.
+  #   PORTS:   macOS blocks ports 445/139 at the OS level by default (Samba conflicts with
+  #            macOS's own SMB stack). You may need to disable macOS file sharing first, or
+  #            remap to non-standard ports (e.g. 1445:445).
+  #   VOLUME:  The host path below is Linux-specific. Adjust for your OS:
+  #            Linux:   /home/youruser/BDA:/mnt/share
+  #            Mac:     /Users/youruser/BDA:/mnt/share
+  #            Windows: /c/Users/youruser/BDA:/mnt/share   (Git Bash path format)
+  samba:
+    image: dperson/samba
+    container_name: samba-server
+    restart: unless-stopped
+    ports:
+     - "445:445" # SMB port
+     - "139:139" # NetBIOS session service
+    volumes:
+     - /home/bstadmin/BDA:/mnt/share # PLATFORM: Linux path — see notes above
+    environment:
+     # Define users and passwords (e.g., user1:password1)
+     - USERS=user1;password1
+     # Define shares: "Share Name;Container Path;Browsable;Writable;Guest Access;User"
+     - SHARES=BDA_NWD;/mnt/share;yes;yes;yes;user1
+     # Optional: Set a workgroup name
+     - WORKGROUP=WORKGROUP
+    networks:
+      - threesixty
+
   nginx:
-    image: nginx:1.28.0-alpine
+    image: ${IMAGE_NGINX:-nginx:1.28.0-alpine}
     container_name: nginx-proxy
     ports:
       - "80:80"
@@ -52,16 +84,22 @@ services:
         max-file: "3"
 
   threesixty-admin:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixty:5.2.1
+    image: ${IMAGE_3SIXTY_ADMIN:-782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixty:5.2.2}
     container_name: threesixty-admin
     env_file:
-      - .env
+      - ./.env
     environment:
       SSL_ENABLED: false
     depends_on:
       mongo:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      # PLATFORM: Linux path — adjust for your OS before starting:
+      #   Mac:     /Users/youruser/BDA:/mnt/share
+      #   Windows: /c/Users/youruser/BDA:/mnt/share   (Git Bash path format)
+      # Remove or comment this volume entry if the BFS/NWD share is not needed locally.
+      - /home/bstadmin/BDA:/mnt/share
     networks:
       - threesixty
     healthcheck:
@@ -81,16 +119,16 @@ services:
       driver: "json-file"
       options:
         max-size: "50m"
-        max-file: "5"
+        max-file: "5"    
     #volumes:
     #  - ./certs:/opt/certs:ro     # <- mount your .cer files here
     #  - ./my-data:/usr/local/tomcat/localMount:rw
 
   threesixty-discovery:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixtydiscovery:5.2.1
+    image: ${IMAGE_3SIXTY_DISCOVERY:-782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objective3sixtydiscovery:5.2.2}
     container_name: threesixty-discovery
     env_file:
-      - .env
+      - ./.env
     environment:
       SSL_ENABLED: false
       APP_URI: http://threesixty-admin:8080/3sixty-admin
@@ -125,12 +163,12 @@ services:
     #- ./vault-agent/.vault-token:/vault/.vault-token:ro
 
   mongo:
-    image: mongo:8.0.11
+    image: ${IMAGE_MONGO:-mongo:8.0.11}
     container_name: mongo
     ports:
       - "27017:27017"
     env_file:
-      - .env
+      - ./.env
     volumes:
       - mongo_data:/data/db
       - ./mongodb/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
@@ -156,82 +194,111 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    restart: unless-stopped
-    networks:
-      - threesixty
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1.5G
-        reservations:
-          memory: 1G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+  #   container_name: elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - threesixty
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 1.5G
+  #       reservations:
+  #         memory: 1G
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "50m"
+  #       max-file: "5"
 
   # OI RAG - new remote agent replacing older 3sixty-rag
-  oirag:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveoirag:5.0.1-RC3
-    container_name: oirag
+  # oirag:
+  #   image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveoirag:5.0.1-RC3
+  #   container_name: oirag
+  #   env_file:
+  #     - ./.env
+  #   volumes:
+  #     - ./logs:/oi-rag-logs
+  #   depends_on:
+  #     opensearch:
+  #       condition: service_healthy
+  #     ollama:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   networks:
+  #     - threesixty
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 4G
+  #       reservations:
+  #         memory: 2G
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "50m"
+  #       max-file: "5"
+
+  # 3sixty Remote Agent - RAG - Restart after token and name update
+  remote-agent-3sixty-rag:
+    image: ${IMAGE_REMOTE_AGENT:-782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectiveremoteagentoirag:1.8.0}
+    container_name: remote-agent-3sixty-rag
     env_file:
-      - .env
-    volumes:
-      - ./logs:/oi-rag-logs
-    depends_on:
-      opensearch:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-    restart: unless-stopped
+      - ./.env
+    ports:
+      - "8083:8083"
     networks:
       - threesixty
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4G
-        reservations:
-          memory: 2G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
 
+  # 3Sixty RAG
+  3sixty-rag:
+    image: ${IMAGE_RAG:-782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/obj3sixtyrag:1.2.0}
+    container_name: 3sixty-rag
+    ports:
+      - "5000:8888"
+    env_file:
+      - ./.env
+    volumes:
+      - ./logs:/3sixty-rag-logs
+      - ./certs/root-ca.pem:/app/certs/root-ca.pem:ro
+    environment:
+      - REQUESTS_CA_BUNDLE=/app/certs/root-ca.pem
+      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+    networks:
+      - threesixty    
+
+  # Ollama
   ollama:
-    image: ollama/ollama:0.17.7
+    image: ${IMAGE_OLLAMA:-ollama/ollama:0.17.7}
     container_name: ollama
     volumes:
       - ollama_data:/root/.ollama
     entrypoint: [ "bash", "-c" ]
     command: >
-      "ollama serve & sleep 5 && ollama pull mxbai-embed-large && wait"
+      "ollama serve & sleep 5 && ollama pull mxbai-embed-large && ollama pull gemma2:2b && wait"
     restart: unless-stopped
     networks:
       - threesixty
@@ -255,16 +322,21 @@ services:
         max-file: "5"
 
   opensearch:
-    image: opensearchproject/opensearch:2.17.1
+    image: ${IMAGE_OPENSEARCH:-opensearchproject/opensearch:2.17.1}
     container_name: opensearch
     environment:
       http.host: 0.0.0.0
       network.host: 0.0.0.0
       transport.host: 127.0.0.1
       discovery.type: single-node
-      compatibility.override_main_response_version: true
+      #compatibility.override_main_response_version: true
       bootstrap.memory_lock: true # Disable JVM heap memory swapping
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: 0bjManager!01
+      DISABLE_SECURITY_PLUGIN: "true"
       OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
     volumes:
       - opensearch_data:/usr/share/opensearch/data:rw
     restart: unless-stopped
@@ -290,12 +362,13 @@ services:
         max-file: "5"
 
   opensearch-dashboard:
-    image: opensearchproject/opensearch-dashboards:2.17.1
+    image: ${IMAGE_OPENSEARCH_DASHBOARDS:-opensearchproject/opensearch-dashboards:2.17.1}
     container_name: opensearch-dashboard
     ports:
       - "15601:5601"
     environment:
       OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
     depends_on:
       opensearch:
         condition: service_healthy
@@ -323,10 +396,10 @@ services:
 
   # SCIM user provisioning
   rabbitmq:
-    image: rabbitmq:4.1-management
+    image: ${IMAGE_RABBITMQ:-rabbitmq:4.1-management}
     container_name: rabbitmq
     env_file:
-      - .env
+      - ./.env
     ports:
       #   - "5672:5672"
       - "15672:15672"
@@ -353,10 +426,10 @@ services:
         max-file: "3"
   
   scim-server:
-    image: 782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver:1.0.5
+    image: ${IMAGE_SCIM:-782396859527.dkr.ecr.ap-southeast-2.amazonaws.com/objectivescimserver:2.0.0}
     container_name: scim-server
     env_file:
-      - .env
+      - ./.env
     depends_on:
       mongo:
         condition: service_healthy

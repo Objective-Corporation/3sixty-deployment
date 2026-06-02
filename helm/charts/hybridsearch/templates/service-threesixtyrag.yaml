@@ -1,0 +1,14 @@
+{{- if .Values.threesixtyrag.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hybridsearch.fullname" . }}-3sixtyrag
+spec:
+  type: {{ .Values.threesixtyrag.service.type }}
+  selector:
+    app: {{ include "hybridsearch.fullname" . }}-3sixtyrag
+  ports:
+    - name: http
+      port: {{ .Values.threesixtyrag.service.port }}
+      targetPort: {{ .Values.threesixtyrag.service.port }}
+{{- end }}

@@ -10,6 +10,25 @@ Get 3Sixty running locally in 5 minutes.
 - AWS CLI v2 configured
 - 8GB+ RAM available
 - 20GB+ disk space
+- Chocolatey and  Makefile
+- Git Bash
+
+---
+Chocolatey and Makefile Install
+
+Set-ExecutionPolicy Bypass -Scope Process -Force
+iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+choco
+
+choco install make
+make --version
+
+
+---
+
+Git Bash Install
+
+winget install --id Git.Git -e --source winget
 
 ---
 
@@ -32,14 +51,17 @@ make aws-verify
 
 ```bash
 # Copy sample environment file
-cp .env.sample .env
+cp .env.sample .env          # Linux/macOS
+copy .env.sample .env         # Windows
 
 # Edit .env with your values (minimum required):
-# - MONGO_INITDB_ROOT_PASSWORD
-# - RABBITMQ_DEFAULT_PASSWORD
-# - CLIENT_ID (Azure AD)
-# - TENANT_ID (Azure AD)
-# - CLIENT_SECRET (Azure AD)
+# - MONGO_INITDB_ROOT_PASSWORD   (generate: openssl rand -base64 32)
+# - RABBITMQ_DEFAULT_PASS        (generate: openssl rand -base64 32)
+# - CLIENT_ID                    (Azure Portal → App Registrations)
+# - TENANT_ID                    (Azure Portal → App Registrations)
+# - CLIENT_SECRET                (Azure Portal → App Registrations)
+# - OPENAI_API_KEY               (LLM provider, or leave as no-key for Ollama)
+# - BEARER_TOKEN                 (any strong random string)
 ```
 
 ### 3. Generate SSL Certificates
@@ -61,13 +83,13 @@ make health
 
 ### 5. Access Applications
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| **Admin UI** | https://localhost/3sixty-admin/ | Configure in Admin during first login |
-| **Discovery UI** | https://localhost/3sixty-discovery/ | Azure AD SSO |
-| **OpenSearch Dashboard** | https://localhost/opensearch-dashboard/ | admin / admin |
-| **RabbitMQ Management** | http://localhost:15672 | See .env file |
-| **Kibana** (optional) | https://localhost/kibana | Requires `make elasticsearch-start` |
+| Service | URL | Notes |
+| --- | --- | --- |
+| **Admin UI** | <https://localhost/3sixty-admin/> | Configure during first login |
+| **Discovery UI** | <https://localhost/3sixty-discovery/> | Azure AD SSO |
+| **OpenSearch Dashboards** | <https://localhost/opensearch-dashboard/> | Also direct: <http://localhost:15601> |
+| **RabbitMQ Management** | <http://localhost:15672> | Credentials from `.env` |
+| **Kibana** (optional) | <https://localhost/kibana> | Requires `make elasticsearch-start` |
 
 ---
 
@@ -76,29 +98,34 @@ make health
 ```bash
 # View logs
 make logs                    # All services
-make logs-admin             # Admin service only
-make logs-discovery         # Discovery service only
+make logs-admin              # Admin service only
+make logs-discovery          # Discovery service only
+make logs-opensearch         # OpenSearch only
 
 # Service management
-make stop                   # Stop all services
-make restart               # Restart all services
-make clean                 # Stop and remove volumes (DESTRUCTIVE)
+make stop                    # Stop all services
+make restart                 # Restart all services
+make clean                   # Stop and remove volumes (DESTRUCTIVE)
 
 # Health checks
-make health                # Check service health
-make ps                    # View running containers
+make health                  # Check service health
+make ps                      # View running containers
 
 # Updates
-make pull                  # Pull latest images
-make update                # Pull images and restart
+make pull                    # Pull latest images
+make update                  # Pull images and restart
+
+# OpenSearch (preferred search engine — runs as part of core stack)
+make opensearch-start        # Start OpenSearch + Dashboards independently
+make opensearch-stop         # Stop OpenSearch + Dashboards
 
 # Monitoring (optional)
-make monitoring-start      # Start Prometheus + Grafana
-make monitoring-stop       # Stop monitoring stack
+make monitoring-start        # Start Prometheus + Grafana
+make monitoring-stop         # Stop monitoring stack
 
-# Elasticsearch + Kibana (optional)
-make elasticsearch-start   # Start Elasticsearch + Kibana
-make elasticsearch-stop    # Stop Elasticsearch + Kibana
+# Elasticsearch + Kibana (optional — legacy, prefer OpenSearch)
+make elasticsearch-start     # Start on remapped ports 19200/5601
+make elasticsearch-stop      # Stop Elasticsearch + Kibana
 ```
 
 ---
@@ -106,6 +133,7 @@ make elasticsearch-stop    # Stop Elasticsearch + Kibana
 ## Troubleshooting
 
 ### Services won't start
+
 ```bash
 # Check Docker is running
 docker info
@@ -118,6 +146,7 @@ make aws-verify
 ```
 
 ### Can't access via HTTPS
+
 ```bash
 # Verify nginx is running
 docker ps | grep nginx
@@ -130,40 +159,52 @@ docker compose restart nginx
 ```
 
 ### MongoDB connection errors
+
 ```bash
 # Check MongoDB is healthy
 docker exec mongo mongosh --eval "db.adminCommand('ping')"
 
 # Verify environment variables
-cat .env | grep MONGO
+grep MONGO .env
 ```
 
 ### Discovery service login fails
+
 ```bash
 # Verify Azure AD configuration
-cat .env | grep CLIENT
+grep CLIENT .env
 
 # Restart all services to sync OAuth state
 make restart
+```
+
+### OpenSearch won't start
+
+```bash
+# Linux/WSL2: check and set vm.max_map_count
+sysctl vm.max_map_count
+sudo sysctl -w vm.max_map_count=262144
 ```
 
 ---
 
 ## What's Next?
 
-1. **Configure OAuth2** in Admin UI for Discovery service
-2. **Create Remote Agent** in Admin UI and configure `.env.oi-agent`
-3. **Start monitoring stack**: `make monitoring-start`
-4. **Review security settings**: See [REMEDIATION.md](REMEDIATION.md)
+1. **Configure OAuth2** in Admin UI for the Discovery service
+2. **Create Remote Agent** in Admin UI, then update `REMOTE_AGENT_TOKEN` and `REMOTE_AGENT_NAME` in `.env` and run `make oi-agent-start`
+3. **Select your LLM provider** — edit the provider block in `.env` (Objective Foundation API, Gemini, OpenAI, or local Ollama)
+4. **Start monitoring stack**: `make monitoring-start`
+5. **Review security settings**: see [REMEDIATION.md](REMEDIATION.md)
 
 ---
 
 ## Getting Help
 
-- **Documentation**: [README.md](README.md)
-- **Issues**: Review [REMEDIATION.md](REMEDIATION.md)
-- **Monitoring**: Access Grafana at http://localhost:3001 (after `make monitoring-start`)
+- **Full documentation**: [README.md](README.md)
+- **Architecture & spec**: [docs/solution-specification.md](../docs/solution-specification.md)
+- **Security issues**: [REMEDIATION.md](REMEDIATION.md)
+- **Monitoring**: Grafana at <http://localhost:3001> (after `make monitoring-start`)
 
 ---
 
-**Pro Tip**: Run `make help` to see all available commands!
+**Run `make help` to see all available commands.**

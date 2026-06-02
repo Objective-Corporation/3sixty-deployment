@@ -1,6 +1,7 @@
 # 3Sixty Docker Infrastructure Remediation Plan
 
 **Assessment Date**: March 18, 2026  
+**Last Updated**: May 14, 2026  
 **Reviewer**: Docker Infrastructure Specialist  
 **Overall Status**: Development-Ready | Not Production-Ready
 
@@ -17,10 +18,12 @@ The 3Sixty deployment infrastructure demonstrates good development practices but
 ## 🔴 Critical Security Issues
 
 ### 1. Hardcoded Default Credentials
+
 **Severity**: CRITICAL  
 **Risk**: Unauthorized access to databases and messaging systems
 
 **Current State**:
+
 ```bash
 # sample.env files contain weak defaults
 MONGO_INITDB_ROOT_PASSWORD=dbpassword
@@ -29,8 +32,10 @@ SCIM_PASSWORD=changeit
 ```
 
 **Remediation**:
-- ✅ COMPLETED: Created `.env.sample` with password placeholders
-- ✅ COMPLETED: Centralized password management
+
+- ✅ COMPLETED: Created `.env.sample` with `CHANGEME_*` placeholders
+- ✅ COMPLETED: Centralised all service config into single `.env.sample`
+- ✅ COMPLETED: Removed real API key and token committed in old sample files
 - 🔲 TODO: Implement HashiCorp Vault integration for production secrets
 - 🔲 TODO: Add pre-commit hooks to prevent credential commits
 - 🔲 TODO: Rotate all default credentials in existing deployments
@@ -41,10 +46,12 @@ SCIM_PASSWORD=changeit
 ---
 
 ### 2. MongoDB Exposed on Host Network
+
 **Severity**: HIGH  
 **Risk**: Database accessible from host network without proper authentication
 
 **Current State**:
+
 ```yaml
 mongo:
   ports:
@@ -52,6 +59,7 @@ mongo:
 ```
 
 **Remediation**:
+
 - 🔲 TODO: Remove port mapping for production deployments
 - 🔲 TODO: Use Docker network isolation only
 - 🔲 TODO: For dev/debugging, use `docker exec` instead of host ports
@@ -62,43 +70,52 @@ mongo:
 
 ---
 
-### 3. Elasticsearch Without Authentication
-**Severity**: HIGH  
-**Risk**: Unprotected data access, potential data exfiltration
+### 3. OpenSearch Security Disabled for Local Dev
+
+**Severity**: HIGH (production) / Acceptable (local dev)  
+**Risk**: Unprotected data access if exposed to untrusted networks
 
 **Current State**:
+
 ```yaml
-elasticsearch:
-  ports:
-    - "9200:9200"
-    - "9300:9300"
-  # No X-Pack security enabled
+opensearch:
+  environment:
+    DISABLE_SECURITY_PLUGIN: "true"   # local dev only
 ```
 
+OpenSearch is now the preferred search engine (Elasticsearch is legacy/disabled by default).
+The security plugin is disabled for local development convenience. Elasticsearch host ports have
+been remapped to 19200/19300 in `docker-compose.elasticsearch.yaml` to avoid clashing with
+OpenSearch on 9200/9300.
+
 **Remediation**:
-- 🔲 TODO: Enable X-Pack security
-- 🔲 TODO: Configure TLS for Elasticsearch cluster communication
-- 🔲 TODO: Create role-based access control (RBAC)
-- 🔲 TODO: Remove port mappings or bind to localhost only
+
+- 🔲 TODO: Enable OpenSearch security plugin for production (`DISABLE_SECURITY_PLUGIN: "false"`)
+- 🔲 TODO: Set strong `OPENSEARCH_INITIAL_ADMIN_PASSWORD` and reference from `.env`
+- 🔲 TODO: Configure TLS for OpenSearch cluster communication
+- 🔲 TODO: Remove host port bindings (9200/9300) for production deployments
 
 **Timeline**: Week 1  
-**Effort**: 4 hours
+**Effort**: 3 hours
 
 ---
 
 ### 4. Vault Dev Mode in Production
+
 **Severity**: CRITICAL (if used in production)  
 **Risk**: Data loss, unauthorized access with root token
 
 **Current State**:
+
 ```yaml
 vault:
   environment:
     VAULT_DEV_ROOT_TOKEN_ID: root  # Hardcoded
-  command: server -dev  # In-memory only
+  command: server -dev             # In-memory only
 ```
 
 **Remediation**:
+
 - 🔲 TODO: Configure Vault in production mode with persistent storage
 - 🔲 TODO: Implement proper unsealing mechanism
 - 🔲 TODO: Use auto-unseal with cloud KMS
@@ -111,15 +128,18 @@ vault:
 ---
 
 ### 5. Self-Signed Certificates
+
 **Severity**: MEDIUM  
 **Risk**: MITM attacks, certificate trust issues
 
 **Current State**:
+
 - Self-signed certificates generated locally
 - No certificate validation in documentation
 - Manual certificate management
 
 **Remediation**:
+
 - 🔲 TODO: Integrate Let's Encrypt for automatic SSL/TLS
 - 🔲 TODO: Use cert-manager for Kubernetes deployments
 - 🔲 TODO: Document certificate rotation procedures
@@ -133,10 +153,12 @@ vault:
 ## ⚠️ High Priority Configuration Issues
 
 ### 6. Missing Health Checks
+
 **Severity**: HIGH  
 **Impact**: Race conditions, services receiving traffic before ready
 
 **Remediation**:
+
 - ✅ COMPLETED: Added health checks to all services
 - 🔲 TODO: Test health check endpoints in staging
 - 🔲 TODO: Configure health check monitoring alerts
@@ -147,10 +169,12 @@ vault:
 ---
 
 ### 7. No Resource Limits
+
 **Severity**: HIGH  
 **Impact**: Resource exhaustion, noisy neighbor problems
 
 **Remediation**:
+
 - ✅ COMPLETED: Added CPU and memory limits to all services
 - 🔲 TODO: Performance test under resource constraints
 - 🔲 TODO: Tune limits based on actual usage metrics
@@ -162,17 +186,20 @@ vault:
 ---
 
 ### 8. Version Inconsistencies
+
 **Severity**: MEDIUM  
 **Impact**: Compatibility issues, unclear canonical configuration
 
-**Files Affected**:
-- `docker-compose.yaml`: `objective3sixty:5.2.0`, `mongo:8.0.11`
-- `docker-compose.afs.yaml`: `objective3sixty:5.0.4-RC1`, `mongo:8.0.9`
+**Current State**:
+
+- `docker-compose.yaml`: `objective3sixty:5.2.1`, `mongo:8.0.11` (current)
+- Legacy backup files reference older versions — remove or update
 
 **Remediation**:
-- 🔲 TODO: Standardize versions across all compose files
+
+- 🔲 TODO: Remove or archive `docker-compose.yaml.backup` and `docker-compose.afs.yaml.backup`
 - 🔲 TODO: Use environment variables for version pinning
-- 🔲 TODO: Document version compatibility matrix
+- 🔲 TODO: Document version compatibility matrix in solution specification
 - 🔲 TODO: Implement version testing in CI/CD
 
 **Timeline**: Week 1  
@@ -181,12 +208,14 @@ vault:
 ---
 
 ### 9. Missing Logging Configuration
+
 **Severity**: MEDIUM  
 **Impact**: Disk space exhaustion, difficult troubleshooting
 
 **Remediation**:
-- 🔲 TODO: Add JSON file logging driver with rotation
-- 🔲 TODO: Configure log aggregation (ELK/Loki)
+
+- ✅ COMPLETED: Added JSON file logging with rotation to all services
+- 🔲 TODO: Configure log aggregation (Loki or OpenSearch ingest)
 - 🔲 TODO: Set appropriate log levels per environment
 - 🔲 TODO: Implement structured logging
 
@@ -196,11 +225,13 @@ vault:
 ---
 
 ### 10. Nginx Security Headers Missing
+
 **Severity**: MEDIUM  
 **Impact**: Vulnerable to clickjacking, XSS, MIME sniffing
 
 **Remediation**:
-- ✅ COMPLETED: Added security headers to nginx.conf
+
+- ✅ COMPLETED: Added security headers to `nginx/nginx.conf`
 - 🔲 TODO: Test CSP headers with application
 - 🔲 TODO: Implement HSTS preload
 - 🔲 TODO: Add rate limiting
@@ -213,11 +244,14 @@ vault:
 ## 🟡 Medium Priority Improvements
 
 ### 11. Inconsistent Restart Policies
+
 **Current State**:
-- `unless-stopped`: nginx, mongo, elasticsearch
-- `on-failure:5`: admin, discovery, scim-server
+
+- `unless-stopped`: nginx, mongo, opensearch, ollama
+- Review all services for consistent policy
 
 **Remediation**:
+
 - 🔲 TODO: Standardize restart policies per environment
 - 🔲 TODO: Document restart policy rationale
 - 🔲 TODO: Implement circuit breaker for rapid failures
@@ -228,20 +262,24 @@ vault:
 ---
 
 ### 12. Ollama Model Pulling Performance
+
 **Current State**:
+
 ```yaml
 command: >
-  "ollama serve & sleep 5 && ollama pull mxbai-embed-large && wait"
+  "ollama serve & sleep 5 && ollama pull mxbai-embed-large && ollama pull gemma2:2b && wait"
 ```
 
 **Issues**:
-- Model pulls on every container start (slow)
-- Fixed 5-second sleep (brittle)
+
+- Models are pulled on first start (slow) but cached in `ollama_data` volume on subsequent starts
+- Fixed 5-second sleep before pull (brittle)
 - No health check for model availability
 
 **Remediation**:
-- 🔲 TODO: Create custom Ollama image with model baked in
-- 🔲 TODO: Use init containers or wait-for pattern
+
+- 🔲 TODO: Create custom Ollama image with models baked in for faster cold starts
+- 🔲 TODO: Use init containers or wait-for pattern instead of fixed sleep
 - 🔲 TODO: Add health check for model readiness
 
 **Timeline**: Week 3  
@@ -250,16 +288,20 @@ command: >
 ---
 
 ### 13. MongoDB Init Script Improvements
+
 **Current State**:
+
 ```bash
 export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ```
 
 **Issues**:
+
 - Silent fallback to defaults
 - No validation of required variables
 
 **Remediation**:
+
 - 🔲 TODO: Fail fast if required env vars missing
 - 🔲 TODO: Add index creation for performance
 - 🔲 TODO: Implement idempotent script execution
@@ -269,26 +311,31 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 
 ---
 
-### 14. Commented Code Cleanup
-**Files**:
-- `docker-compose.yaml`: Lines 87-96 (deprecated 3sixty-rag service)
-- Volume mounts with unclear purpose
+### 14. CORS Wildcard in RAG Service
+
+**Current State**:
+
+```bash
+CORS_ALLOW_ORIGINS=*   # in .env.sample
+```
 
 **Remediation**:
-- 🔲 TODO: Remove deprecated service definitions
-- 🔲 TODO: Document all commented configurations
-- 🔲 TODO: Move optional configs to separate files
 
-**Timeline**: Week 3  
-**Effort**: 1 hour
+- 🔲 TODO: Restrict to specific domain in production (e.g. `https://threesixty.objective.com`)
+- 🔲 TODO: Document CORS requirements per deployment environment
+
+**Timeline**: Week 1  
+**Effort**: 30 minutes
 
 ---
 
 ## 🟢 Low Priority Enhancements
 
 ### 15. Monitoring Stack Implementation
+
 **Remediation**:
-- ✅ COMPLETED: Created docker-compose.monitoring.yaml
+
+- ✅ COMPLETED: Created `docker-compose.monitoring.yaml` (Prometheus + Grafana)
 - 🔲 TODO: Configure Grafana dashboards
 - 🔲 TODO: Add alerting rules
 - 🔲 TODO: Integrate with PagerDuty/Opsgenie
@@ -299,7 +346,9 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ---
 
 ### 16. Image Optimization
+
 **Remediation**:
+
 - 🔲 TODO: Audit ECR image sizes
 - 🔲 TODO: Implement multi-stage builds
 - 🔲 TODO: Use distroless base images where applicable
@@ -311,7 +360,9 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ---
 
 ### 17. Backup and Disaster Recovery
+
 **Remediation**:
+
 - 🔲 TODO: Implement automated MongoDB backups
 - 🔲 TODO: Document restore procedures
 - 🔲 TODO: Test disaster recovery runbook
@@ -323,10 +374,12 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ---
 
 ### 18. Network Optimization
+
 **Current State**: Basic bridge network
 
 **Remediation**:
-- 🔲 TODO: Evaluate overlay network for multi-host
+
+- 🔲 TODO: Evaluate overlay network for multi-host deployments
 - 🔲 TODO: Implement network segmentation
 - 🔲 TODO: Add network policies for zero-trust
 - 🔲 TODO: Configure MTU for performance
@@ -338,18 +391,20 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 
 ## 📊 Remediation Timeline
 
-### Week 1 (Immediate - Security Focus)
+### Week 1 (Immediate — Security Focus)
+
 - [ ] Change all default passwords (**2h**)
 - [ ] Remove MongoDB host port mapping (**1h**)
-- [ ] Enable Elasticsearch authentication (**4h**)
-- [ ] Standardize image versions (**2h**)
-- [ ] Add logging configuration (**4h**)
+- [ ] Enable OpenSearch security plugin (**3h**)
+- [ ] Standardize image versions / remove backup files (**2h**)
+- [ ] Restrict CORS in production (**0.5h**)
 
-**Total Effort**: 13 hours
+**Total Effort**: ~9 hours
 
 ---
 
-### Week 2 (High Priority - Production Readiness)
+### Week 2 (High Priority — Production Readiness)
+
 - [ ] Configure Vault production mode (**8h**)
 - [ ] Implement Let's Encrypt integration (**4h**)
 - [ ] Add log aggregation (**4h**)
@@ -360,18 +415,19 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 
 ---
 
-### Week 3 (Medium Priority - Performance)
+### Week 3 (Medium Priority — Performance)
+
 - [ ] Optimize Ollama image (**3h**)
 - [ ] Improve MongoDB init script (**2h**)
-- [ ] Clean up commented code (**1h**)
 - [ ] Performance test with resource limits (**4h**)
 - [ ] Tune resource allocations (**3h**)
 
-**Total Effort**: 13 hours
+**Total Effort**: 12 hours
 
 ---
 
-### Week 4 (Low Priority - Operations)
+### Week 4 (Low Priority — Operations)
+
 - [ ] Configure Grafana dashboards (**4h**)
 - [ ] Set up alerting rules (**4h**)
 - [ ] Implement automated backups (**8h**)
@@ -385,25 +441,29 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ## 🎯 Success Criteria
 
 ### Security
+
 - [ ] All default passwords changed to strong, unique values
 - [ ] No services exposed to host network unnecessarily
-- [ ] Elasticsearch authentication enabled and tested
+- [ ] OpenSearch security plugin enabled and tested
 - [ ] Vault running in production mode with auto-unseal
 - [ ] SSL/TLS certificates from trusted CA
 
 ### Reliability
+
 - [ ] Health checks passing for all services
 - [ ] Resource limits preventing service exhaustion
 - [ ] Restart policies appropriate for service criticality
 - [ ] Zero failed deployments due to configuration issues
 
 ### Observability
+
 - [ ] Prometheus metrics exported from all services
 - [ ] Grafana dashboards showing key metrics
 - [ ] Log aggregation configured and tested
 - [ ] Alerts configured for critical conditions
 
 ### Operations
+
 - [ ] Automated backups running and verified
 - [ ] Disaster recovery procedures documented and tested
 - [ ] Deployment playbooks updated
@@ -414,6 +474,7 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ## 📋 Verification Checklist
 
 ### Pre-Production Deployment
+
 - [ ] All critical and high priority items completed
 - [ ] Security scan passed (no critical/high vulnerabilities)
 - [ ] Load testing completed successfully
@@ -424,6 +485,7 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 - [ ] Runbooks validated
 
 ### Production Readiness Gates
+
 - [ ] Change advisory board approval
 - [ ] Security team sign-off
 - [ ] Operations team acceptance
@@ -436,16 +498,19 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 ## 📚 Reference Documentation
 
 ### Security Standards
+
 - OWASP Docker Security Cheat Sheet
 - CIS Docker Benchmark v1.6.0
 - NIST Container Security Guide
 
 ### Best Practices
+
 - Docker Production Best Practices
 - 12-Factor App Methodology
 - Site Reliability Engineering (Google)
 
 ### Tools
+
 - Docker Scout (vulnerability scanning)
 - Trivy (container scanning)
 - Checkov (IaC security)
@@ -461,6 +526,6 @@ export MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE:="dbtest"}
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: March 18, 2026  
-**Next Review**: April 18, 2026
+**Document Version**: 1.1  
+**Last Updated**: May 14, 2026  
+**Next Review**: June 14, 2026
